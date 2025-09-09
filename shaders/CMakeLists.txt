@@ -1,9 +1,10 @@
-﻿cmake_minimum_required (VERSION 3.10)
+cmake_minimum_required (VERSION 3.10)
 
 # 设置 slang 编译脚本路径
 set(COMPILE_SHADERS_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/compileshaders.py")
 # 设置 slang 编译器路径
-set(SLANG_COMPILER "${PROJECT_SOURCE_DIR}/external/slang/bin/slangc.exe" CACHE FILEPATH "Path to slangc compiler")
+set(SLANG_COMPILER "${PROJECT_SOURCE_DIR}/external/slang/bin/slangc.exe" CACHE FILEPATH "slangc编译器路径")
+option(SHADER_FORCE_COMPILE "编译shader时是否重新编译所有shader" OFF)
 
 file(GLOB_RECURSE SLANG_SOURCE_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/*.slang"
@@ -16,7 +17,10 @@ find_package (Python3 REQUIRED COMPONENTS Interpreter)
 message(STATUS "Python 解释器路径: ${Python3_EXECUTABLE}")
 add_custom_target(
     Shaders
-    COMMAND ${Python3_EXECUTABLE} ${COMPILE_SHADERS_SCRIPT} --slangc "${SLANG_COMPILER}" --outputDir "${SHADERS_OUTPUT}"
+    COMMAND ${Python3_EXECUTABLE} ${COMPILE_SHADERS_SCRIPT} 
+            --slangc "${SLANG_COMPILER}" 
+            --outputDir "${SHADERS_OUTPUT}" 
+            $<IF:$<BOOL:${SHADER_FORCE_COMPILE}>,--force,>
     DEPENDS ${SPIRV_BINARY_FILES}
 )
 

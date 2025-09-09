@@ -15,8 +15,6 @@
 class Camera
 {
 private:
-	float fov;
-	float znear, zfar;
 
 	void updateViewMatrix()
 	{
@@ -57,6 +55,8 @@ public:
 	glm::vec3 rotation = glm::vec3();
 	glm::vec3 position = glm::vec3();
 	glm::vec4 viewPos = glm::vec4();
+	float fov;
+	float znear, zfar;
 
 	float rotationSpeed = 1.0f;
 	float movementSpeed = 1.0f;
