@@ -70,7 +70,7 @@ namespace vks
 		/** @brief Setting this path chnanges the place where the samples looks for assets and shaders */
 		extern std::string resourcePath;
 
-		/** @brief SPVÎÄ¼þÂ·¾¶ */
+		/** @brief SPVæ–‡ä»¶è·¯å¾„ */
 		extern std::string shadersSPVPath;
 
 		/** @brief Disable message boxes on fatal errors */

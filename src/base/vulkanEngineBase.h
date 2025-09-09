@@ -93,10 +93,7 @@ private:
 	void createCommandBuffers();
 	void destroyCommandBuffers();
 	std::string shaderType = "glsl";
-protected:
-	// Returns the path to the root of the glsl, hlsl or slang shader directory.
-	std::string getShadersPath() const;
-
+public:
 	// Frame counter to display fps
 	uint32_t frameCounter = 0;
 	uint32_t lastFPS = 0;
@@ -288,6 +285,8 @@ public:
 	virtual ~VulkanEngineBase();
 	/** @brief Setup the vulkan instance, enable required extensions and connect to the physical device (GPU) */
 	bool initVulkan();
+	// Returns the path to the root of the glsl, hlsl or slang shader directory.
+	std::string getShadersPath() const;
 
 #if defined(_WIN32)
 	void setupConsole(std::string title);

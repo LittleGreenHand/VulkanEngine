@@ -98,6 +98,7 @@ args = parser.parse_args()
 compiler_path = "..\\external\\slang\\bin\\slangc.exe"
 if args.slangc:
     compiler_path = args.slangc
+print(f"slang编译器路径: {compiler_path}")
 
 # 检查输出目录是否存在
 out_dir = "../build/bin/shaders/"
@@ -106,11 +107,15 @@ if args.outputDir:
 if not os.path.exists(out_dir):
     os.makedirs(out_dir, exist_ok=True)
     print(f"创建输出目录: {os.path.abspath(out_dir)}")
+print(f"\nshader编译输出目录: {os.path.abspath(out_dir)}")
 
-# 是否强制生成所有shader
-args.force = True
-# args.force = True False
-print(f"slang compiler path: {compiler_path}")
+# 是否强制重新生成所有shader，否则仅生成发生变动的shader（通过时间戳判断是否发生了变动）
+force_compile = False
+if args.force:
+    force_compile = True
+    print(f"\n重新生成所有shader")
+else:
+    print(f"\n更新所有shader")
 
 def getShaderStages(filename):
     stages = []
@@ -162,8 +167,7 @@ for root, dirs, files in os.walk(base_dir):
     if not shader_files:
         continue
         
-    print(f"\n[{sample_name}]")
-    print("Slang Compile Start")
+    print("\n开始编译：")
     for file in shader_files:
         input_path = os.path.join(root, file)
         stages = getShaderStages(input_path)
@@ -200,7 +204,7 @@ for root, dirs, files in os.walk(base_dir):
             output_files.append(output_path)
             
             # 检查是否需要编译
-            if args.force or not os.path.exists(output_path):
+            if force_compile or not os.path.exists(output_path):
                 needs_compile = True
             else:
                 # 比较时间戳
@@ -250,11 +254,11 @@ for root, dirs, files in os.walk(base_dir):
                 print(f"    [x] {stage} exception: {str(e)}")
                 sys.exit(1)    
     checkRenameFiles(sample_name)
-    print("Slang Compile End")
+    print("结束编译")
 
 # 输出统计信息
 total_time = time.time() - total_start
-print("\nSlang Compilation summary:")
+print("\n编译情况统计:")
 print(f"  Total shader stages: {compiled_count + skipped_count}")
 print(f"  Compiled: {compiled_count}")
 print(f"  Skipped: {skipped_count}")
