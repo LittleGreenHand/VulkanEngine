@@ -24,10 +24,12 @@
 #define KEY_KPADD 0x6B
 #define KEY_KPSUB 0x6D
 #define KEY_B 0x42
+#define KEY_E 0x45 
 #define KEY_F 0x46
 #define KEY_L 0x4C
 #define KEY_N 0x4E
 #define KEY_O 0x4F
+#define KEY_Q 0x51
 #define KEY_T 0x54
 
 #elif defined(VK_USE_PLATFORM_ANDROID_KHR)

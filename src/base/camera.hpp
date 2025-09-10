@@ -55,6 +55,9 @@ public:
 	glm::vec3 rotation = glm::vec3();
 	glm::vec3 position = glm::vec3();
 	glm::vec4 viewPos = glm::vec4();
+	glm::vec3 camFront = glm::vec3();
+	glm::vec3 camRight = glm::vec3();
+	glm::vec3 camUp = glm::vec3();
 	float fov;
 	float znear, zfar;
 
@@ -72,15 +75,17 @@ public:
 
 	struct
 	{
-		bool left = false;
-		bool right = false;
-		bool up = false;
-		bool down = false;
+		bool left = false;		// key A
+		bool right = false;		// key D
+		bool up = false;		// key W
+		bool down = false;		// key S
+		bool top = false;		// key Q
+		bool bottom = false;	// key E
 	} keys;
 
 	bool moving() const
 	{
-		return keys.left || keys.right || keys.up || keys.down;
+		return keys.left || keys.right || keys.up || keys.down || keys.top || keys.bottom;
 	}
 
 	float getNearClip() const {
@@ -165,22 +170,26 @@ public:
 		{
 			if (moving())
 			{
-				glm::vec3 camFront;
 				camFront.x = -cos(glm::radians(rotation.x)) * sin(glm::radians(rotation.y));
 				camFront.y = sin(glm::radians(rotation.x));
 				camFront.z = cos(glm::radians(rotation.x)) * cos(glm::radians(rotation.y));
 				camFront = glm::normalize(camFront);
+				camRight = glm::normalize(glm::cross(camFront, glm::vec3(0.0f, 1.0f, 0.0f)));
+				camUp = glm::normalize(glm::cross(camFront, camRight));
 
 				float moveSpeed = deltaTime * movementSpeed;
-
 				if (keys.up)
 					position += camFront * moveSpeed;
 				if (keys.down)
 					position -= camFront * moveSpeed;
 				if (keys.left)
-					position -= glm::normalize(glm::cross(camFront, glm::vec3(0.0f, 1.0f, 0.0f))) * moveSpeed;
+					position -= camRight * moveSpeed;
 				if (keys.right)
-					position += glm::normalize(glm::cross(camFront, glm::vec3(0.0f, 1.0f, 0.0f))) * moveSpeed;
+					position += camRight * moveSpeed;
+				if (keys.top)
+					position -= camUp * moveSpeed;
+				if (keys.bottom)
+					position += camUp * moveSpeed;
 			}
 		}
 		updateViewMatrix();
