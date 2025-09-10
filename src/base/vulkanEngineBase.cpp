@@ -225,15 +225,15 @@ void VulkanEngineBase::prepare()
 	setupFrameBuffer();
 	settings.overlay = settings.overlay && (!benchmark.active);
 	if (settings.overlay) {
-		ui.maxConcurrentFrames = maxConcurrentFrames;
-		ui.device = vulkanDevice;
-		ui.queue = queue;
-		ui.shaders = {
+		uiOverlay.maxConcurrentFrames = maxConcurrentFrames;
+		uiOverlay.device = vulkanDevice;
+		uiOverlay.queue = queue;
+		uiOverlay.shaders = {
 			loadShader(getShadersPath() + "uioverlay.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
 			loadShader(getShadersPath() + "uioverlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
 		};
-		ui.prepareResources();
-		ui.preparePipeline(pipelineCache, renderPass, swapChain.colorFormat, depthFormat);
+		uiOverlay.prepareResources();
+		uiOverlay.preparePipeline(pipelineCache, renderPass, swapChain.colorFormat, depthFormat);
 	}
 }
 
@@ -641,13 +641,8 @@ void VulkanEngineBase::updateOverlay()
 	io.DisplaySize = ImVec2((float)width, (float)height);
 	io.DeltaTime = frameTimer;
 
-	io.MousePos = ImVec2(mouseState.position.x, mouseState.position.y);
-	io.MouseDown[0] = mouseState.buttons.left && ui.visible;
-	io.MouseDown[1] = mouseState.buttons.right && ui.visible;
-	io.MouseDown[2] = mouseState.buttons.middle && ui.visible;
-
 	ImGui::NewFrame();
-
+	ImGui_ImplWin32_NewFrame();
 	//ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
 	//ImGui::SetNextWindowPos(ImVec2(10 * ui.scale, 10 * ui.scale));
 	//ImGui::SetNextWindowSize(ImVec2(0, 0), ImGuiSetCond_FirstUseEver);
@@ -660,7 +655,7 @@ void VulkanEngineBase::updateOverlay()
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 5.0f * ui.scale));
 #endif
 	//ImGui::PushItemWidth(110.0f * ui.scale);
-	OnUpdateUIOverlay(&ui);
+	OnUpdateUIOverlay(&uiOverlay);
 	//ImGui::PopItemWidth();
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
 	ImGui::PopStyleVar();
@@ -673,7 +668,7 @@ void VulkanEngineBase::updateOverlay()
 #endif
 	ImGui::Render();
 
-	ui.update(currentBuffer);
+	uiOverlay.update(currentBuffer);
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
 	if (mouseState.buttons.left) {
@@ -684,12 +679,12 @@ void VulkanEngineBase::updateOverlay()
 
 void VulkanEngineBase::drawUI(const VkCommandBuffer commandBuffer)
 {
-	if (settings.overlay && ui.visible) {
+	if (settings.overlay && uiOverlay.visible) {
 		const VkViewport viewport = vks::initializers::viewport((float)width, (float)height, 0.0f, 1.0f);
 		const VkRect2D scissor = vks::initializers::rect2D(width, height, 0, 0);
 		vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-		ui.draw(commandBuffer, currentBuffer);
+		uiOverlay.draw(commandBuffer, currentBuffer);
 	}
 }
 
@@ -936,8 +931,9 @@ VulkanEngineBase::~VulkanEngineBase()
 		vkDestroySemaphore(device, semaphore, nullptr);
 	}
 
+	ImGui_ImplWin32_Shutdown();
 	if (settings.overlay) {
-		ui.freeResources();
+		uiOverlay.freeResources();
 	}
 
 	delete vulkanDevice;
@@ -1252,12 +1248,13 @@ HWND VulkanEngineBase::setupWindow(HINSTANCE hinstance, WNDPROC wndproc)
 	ShowWindow(window, SW_SHOW);
 	SetForegroundWindow(window);
 	SetFocus(window);
-
+	ImGui_ImplWin32_Init(window);
 	return window;
 }
 
 void VulkanEngineBase::handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	auto a = ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam);
 	switch (uMsg)
 	{
 	case WM_CLOSE:
@@ -1275,7 +1272,7 @@ void VulkanEngineBase::handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 			paused = !paused;
 			break;
 		case KEY_F1:
-			ui.visible = !ui.visible;
+			uiOverlay.visible = !uiOverlay.visible;
 			break;
 		case KEY_F2:
 			if (camera.type == Camera::CameraType::lookat) {
@@ -1305,6 +1302,12 @@ void VulkanEngineBase::handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 			case KEY_D:
 				camera.keys.right = true;
 				break;
+			case KEY_Q:
+				camera.keys.top = true;
+				break;
+			case KEY_E:
+				camera.keys.bottom = true;
+				break;
 			}
 		}
 
@@ -1326,6 +1329,12 @@ void VulkanEngineBase::handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 				break;
 			case KEY_D:
 				camera.keys.right = false;
+				break;
+			case KEY_Q:
+				camera.keys.top = false;
+				break;
+			case KEY_E:
+				camera.keys.bottom = false;
 				break;
 			}
 		}
@@ -3136,7 +3145,7 @@ void VulkanEngineBase::windowResize()
 
 	if ((width > 0.0f) && (height > 0.0f)) {
 		if (settings.overlay) {
-			ui.resize(width, height);
+			uiOverlay.resize(width, height);
 		}
 	}
 
@@ -3172,7 +3181,7 @@ void VulkanEngineBase::handleMouseMove(int32_t x, int32_t y)
 
 	if (settings.overlay) {
 		ImGuiIO& io = ImGui::GetIO();
-		handled = io.WantCaptureMouse && ui.visible;
+		handled = io.WantCaptureMouse && uiOverlay.visible;
 	}
 	mouseMoved((float)x, (float)y, handled);
 

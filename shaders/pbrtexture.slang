@@ -5,6 +5,7 @@ struct VSInput
     float3 Pos;
     float3 Normal;
     float2 UV;
+    float3 Color;
     float4 Tangent;
 };
 

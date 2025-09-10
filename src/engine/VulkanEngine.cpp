@@ -98,48 +98,31 @@ void VulkanEngine::setupDescriptors()
 
 void VulkanEngine::preparePipelines()
 {
-	VkPipelineInputAssemblyStateCreateInfo inputAssemblyState = vks::initializers::pipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
-	VkPipelineRasterizationStateCreateInfo rasterizationState = vks::initializers::pipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
-	VkPipelineColorBlendAttachmentState blendAttachmentState = vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE);
-	VkPipelineColorBlendStateCreateInfo colorBlendState = vks::initializers::pipelineColorBlendStateCreateInfo(1, &blendAttachmentState);
-	VkPipelineDepthStencilStateCreateInfo depthStencilState = vks::initializers::pipelineDepthStencilStateCreateInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL);
-	VkPipelineViewportStateCreateInfo viewportState = vks::initializers::pipelineViewportStateCreateInfo(1, 1);
-	VkPipelineMultisampleStateCreateInfo multisampleState = vks::initializers::pipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT);
-	std::vector<VkDynamicState> dynamicStateEnables = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-	VkPipelineDynamicStateCreateInfo dynamicState = vks::initializers::pipelineDynamicStateCreateInfo(dynamicStateEnables);
-	std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages{};
+	auto tStart = std::chrono::high_resolution_clock::now();
+	PipelineBuilder builder(device);
 
-	// Pipeline layout
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(&descriptorSetLayout, 1);
 	VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
 
-	// Pipelines
-	VkGraphicsPipelineCreateInfo pipelineCI = vks::initializers::pipelineCreateInfo(pipelineLayout, renderPass);
-	pipelineCI.pInputAssemblyState = &inputAssemblyState;
-	pipelineCI.pRasterizationState = &rasterizationState;
-	pipelineCI.pColorBlendState = &colorBlendState;
-	pipelineCI.pMultisampleState = &multisampleState;
-	pipelineCI.pViewportState = &viewportState;
-	pipelineCI.pDepthStencilState = &depthStencilState;
-	pipelineCI.pDynamicState = &dynamicState;
-	pipelineCI.stageCount = static_cast<uint32_t>(shaderStages.size());
-	pipelineCI.pStages = shaderStages.data();
-	pipelineCI.pVertexInputState = vkglTF::Vertex::getPipelineVertexInputState({ vkglTF::VertexComponent::Position, vkglTF::VertexComponent::Normal, vkglTF::VertexComponent::UV, vkglTF::VertexComponent::Tangent });
-
-	// Skybox pipeline (background cube)
-	rasterizationState.cullMode = VK_CULL_MODE_FRONT_BIT;
-	shaderStages[0] = loadShader(getShadersPath() + "skybox.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-	shaderStages[1] = loadShader(getShadersPath() + "skybox.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-	VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.skybox));
+	// Skybox pipeline
+	builder.rasterizationState.cullMode = VK_CULL_MODE_FRONT_BIT;
+	builder.addShaderStage(loadShader(getShadersPath() + "skybox.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
+	builder.addShaderStage(loadShader(getShadersPath() + "skybox.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
+	builder.buildPipeline(renderPass, pipelineCache, pipelineLayout, pipelines.skybox);
+	builder.clearShaderStage();
 
 	// PBR pipeline
-	rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
-	shaderStages[0] = loadShader(getShadersPath() + "pbrtexture.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-	shaderStages[1] = loadShader(getShadersPath() + "pbrtexture.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-	// Enable depth test and write
-	depthStencilState.depthWriteEnable = VK_TRUE;
-	depthStencilState.depthTestEnable = VK_TRUE;
-	VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.pbr));
+	builder.rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
+	//启用深度测试与写入
+	builder.depthStencilState.depthWriteEnable = VK_TRUE;
+	builder.depthStencilState.depthTestEnable = VK_TRUE;
+	builder.addShaderStage(loadShader(getShadersPath() + "pbrtexture.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
+	builder.addShaderStage(loadShader(getShadersPath() + "pbrtexture.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
+	builder.buildPipeline(renderPass, pipelineCache, pipelineLayout, pipelines.pbr);
+
+	auto tEnd = std::chrono::high_resolution_clock::now();
+	auto takeTime = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
+	std::cout << "preparePipelines cost time:" << (float)takeTime / 1000.0f << "ms" << std::endl;
 }
 
 void VulkanEngine::prepareUniformBuffers()
@@ -263,12 +246,13 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 			ImGui::SliderFloat("移动速度", &camera.movementSpeed, 0.1f, 10);
 			ImGui::SliderFloat("旋转速度", &camera.rotationSpeed, 0.1f, 10);
 			ImGui::InputFloat3("位置", (float*)&camera.position);
+			ImGui::InputFloat3("旋转", (float*)&camera.rotation);
 			float fov = camera.fov;
 			float znear = camera.znear;
 			float zfar = camera.zfar;
-			ImGui::InputFloat("FOV", &fov, 0.5f, 5, 1);
-			ImGui::InputFloat("NearPlane", &znear, 1, 100, 1);
-			ImGui::InputFloat("FarPlane", &zfar, 1, 100, 1);
+			ImGui::InputFloat("FOV", &fov, 0.5f, 5, "%.1f");
+			ImGui::InputFloat("NearPlane", &znear, 1, 100, "%.1f");
+			ImGui::InputFloat("FarPlane", &zfar, 1, 100, "%.1f");
 			if(fov != camera.fov || znear != camera.znear || zfar != camera.zfar)
 				camera.setPerspective(fov, (float)width / (float)height, znear, zfar);
 		}
@@ -277,8 +261,8 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 	if (ImGui::CollapsingHeader("PBR设置"), ImGuiTreeNodeFlags_DefaultOpen) {
 		ImGui::Indent();
 		{
-			ImGui::InputFloat("曝光", &uniformDataParams.exposure, 0.01f, 0.1f, 2);
-			ImGui::InputFloat("Gamma", &uniformDataParams.gamma, 0.01f, 0.1f, 2);
+			ImGui::InputFloat("曝光", &uniformDataParams.exposure, 0.01f, 0.1f, "%.2f");
+			ImGui::InputFloat("Gamma", &uniformDataParams.gamma, 0.01f, 0.1f, "%.2f");
 			ImGui::SliderFloat("粗糙度", &uniformDataParams.globalRoughness, 0.01f, 1);
 			ImGui::SliderFloat("金属度", &uniformDataParams.globalMetallic, 0.01f, 1);
 			ImGui::Checkbox("Skybox", &displaySkybox);
@@ -288,21 +272,5 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 }
 void VulkanEngine::OnHandleMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	ImGuiIO& io = ImGui::GetIO();
-	// Only react to keyboard input if ImGui is active
-	if (io.WantCaptureKeyboard) {
-		// Character input
-		if (uMsg == WM_CHAR) {
-			if (wParam > 0 && wParam < 0x10000) {
-				io.AddInputCharacter((unsigned short)wParam);
-			}
-		}
-		// Special keys (tab, cursor, etc.)
-		if ((wParam < 256) && (uMsg == WM_KEYDOWN || uMsg == WM_SYSKEYDOWN)) {
-			io.KeysDown[wParam] = true;
-		}
-		if ((wParam < 256) && (uMsg == WM_KEYUP || uMsg == WM_SYSKEYUP)) {
-			io.KeysDown[wParam] = false;
-		}
-	}
+	
 }

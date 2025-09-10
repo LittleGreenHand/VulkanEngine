@@ -453,9 +453,9 @@ namespace vks
 		return ImGui::RadioButton(caption, value);
 	}
 
-	bool UIOverlay::inputFloat(const char *caption, float *value, float step, uint32_t precision)
+	bool UIOverlay::inputFloat(const char *caption, float *value, float step, const char* format)
 	{
-		return ImGui::InputFloat(caption, value, step, step * 10.0f, precision);
+		return ImGui::InputFloat(caption, value, step, step * 10.0f, format);
 	}
 
 	bool UIOverlay::sliderFloat(const char* caption, float* value, float min, float max)

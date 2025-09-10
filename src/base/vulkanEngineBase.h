@@ -157,7 +157,7 @@ public:
 	uint32_t width = 1280;
 	uint32_t height = 720;
 
-	vks::UIOverlay ui;
+	vks::UIOverlay uiOverlay;
 	CommandLineParser commandLineParser;
 
 	/** @brief Last frame time measured using a high performance timer (if available) */
