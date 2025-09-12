@@ -1,10 +1,21 @@
 #include "VulkanUtil.h"
 VulkanEngine* vkUtils::vkEngine = nullptr;
 bool vkUtils::init = false;
+bool vkUtils::debugUtilsSupported = false;
+PFN_vkCreateDebugUtilsMessengerEXT vkUtils::vkCreateDebugUtilsMessengerEXT{ nullptr };
+PFN_vkDestroyDebugUtilsMessengerEXT vkUtils::vkDestroyDebugUtilsMessengerEXT{ nullptr };
+PFN_vkCmdBeginDebugUtilsLabelEXT vkUtils::vkCmdBeginDebugUtilsLabelEXT{ nullptr };
+PFN_vkCmdInsertDebugUtilsLabelEXT vkUtils::vkCmdInsertDebugUtilsLabelEXT{ nullptr };
+PFN_vkCmdEndDebugUtilsLabelEXT vkUtils::vkCmdEndDebugUtilsLabelEXT{ nullptr };
+PFN_vkQueueBeginDebugUtilsLabelEXT vkUtils::vkQueueBeginDebugUtilsLabelEXT{ nullptr };
+PFN_vkQueueInsertDebugUtilsLabelEXT vkUtils::vkQueueInsertDebugUtilsLabelEXT{ nullptr };
+PFN_vkQueueEndDebugUtilsLabelEXT vkUtils::vkQueueEndDebugUtilsLabelEXT{ nullptr };
+PFN_vkSetDebugUtilsObjectNameEXT vkUtils::vkSetDebugUtilsObjectNameEXT{ nullptr };
 
 void vkUtils::Init(VulkanEngine* Engine)
 {
 	vkEngine = Engine;
+	InitDebugUtils();
 	init = true;
 }
 
@@ -12,6 +23,122 @@ void vkUtils::CleanUp()
 {
 	vkEngine = nullptr;
 	init = false;
+}
+
+// Checks if debug utils are supported (usually only when a graphics debugger is active) and does the setup necessary to use this debug utils
+void vkUtils::InitDebugUtils()
+{
+	// Check if the debug utils extension is present (which is the case if run from a graphics debugger)
+	bool extensionPresent = false;
+	uint32_t extensionCount;
+	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+	std::vector<VkExtensionProperties> extensions(extensionCount);
+	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
+	for (auto& extension : extensions) {
+		if (strcmp(extension.extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0) {
+			extensionPresent = true;
+			break;
+		}
+	}
+
+	if (extensionPresent) {
+		auto instance = vkEngine->instance;
+		// As with an other extension, function pointers need to be manually loaded
+		vkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
+		vkDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
+		vkCmdBeginDebugUtilsLabelEXT = reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT"));
+		vkCmdInsertDebugUtilsLabelEXT = reinterpret_cast<PFN_vkCmdInsertDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkCmdInsertDebugUtilsLabelEXT"));
+		vkCmdEndDebugUtilsLabelEXT = reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT"));
+		vkQueueBeginDebugUtilsLabelEXT = reinterpret_cast<PFN_vkQueueBeginDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkQueueBeginDebugUtilsLabelEXT"));
+		vkQueueInsertDebugUtilsLabelEXT = reinterpret_cast<PFN_vkQueueInsertDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkQueueInsertDebugUtilsLabelEXT"));
+		vkQueueEndDebugUtilsLabelEXT = reinterpret_cast<PFN_vkQueueEndDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkQueueEndDebugUtilsLabelEXT"));
+		vkSetDebugUtilsObjectNameEXT = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT"));
+
+		// Set flag if at least one function pointer is present
+		debugUtilsSupported = (vkCreateDebugUtilsMessengerEXT != VK_NULL_HANDLE);
+	}
+	else {
+		std::cout << "Warning: " << VK_EXT_DEBUG_UTILS_EXTENSION_NAME << " not present, debug utils are disabled.";
+		std::cout << "Try running the sample from inside a Vulkan graphics debugger (e.g. RenderDoc)" << std::endl;
+	}
+}
+
+void vkUtils::cmdBeginLabel(VkCommandBuffer command_buffer, const char* label_name, std::vector<float> color)
+{
+	if (!debugUtilsSupported) {
+		return;
+	}
+	VkDebugUtilsLabelEXT label = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
+	label.pLabelName = label_name;
+	memcpy(label.color, color.data(), sizeof(float) * 4);
+	vkCmdBeginDebugUtilsLabelEXT(command_buffer, &label);
+}
+
+void vkUtils::cmdInsertLabel(VkCommandBuffer command_buffer, const char* label_name, std::vector<float> color)
+{
+	if (!debugUtilsSupported) {
+		return;
+	}
+	VkDebugUtilsLabelEXT label = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
+	label.pLabelName = label_name;
+	memcpy(label.color, color.data(), sizeof(float) * 4);
+	vkCmdInsertDebugUtilsLabelEXT(command_buffer, &label);
+}
+
+void vkUtils::cmdEndLabel(VkCommandBuffer command_buffer)
+{
+	if (!debugUtilsSupported) {
+		return;
+	}
+	vkCmdEndDebugUtilsLabelEXT(command_buffer);
+}
+
+// Functions for putting labels into a queue
+// Labels consist of a name and an optional color
+// How or if these are diplayed depends on the debugger used (RenderDoc e.g. displays both)
+
+void vkUtils::queueBeginLabel(VkQueue queue, const char* label_name, std::vector<float> color)
+{
+	if (!debugUtilsSupported) {
+		return;
+	}
+	VkDebugUtilsLabelEXT label = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
+	label.pLabelName = label_name;
+	memcpy(label.color, color.data(), sizeof(float) * 4);
+	vkQueueBeginDebugUtilsLabelEXT(queue, &label);
+}
+
+void vkUtils::queueInsertLabel(VkQueue queue, const char* label_name, std::vector<float> color)
+{
+	if (!debugUtilsSupported) {
+		return;
+	}
+	VkDebugUtilsLabelEXT label = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
+	label.pLabelName = label_name;
+	memcpy(label.color, color.data(), sizeof(float) * 4);
+	vkQueueInsertDebugUtilsLabelEXT(queue, &label);
+}
+
+void vkUtils::queueEndLabel(VkQueue queue)
+{
+	if (!debugUtilsSupported) {
+		return;
+	}
+	vkQueueEndDebugUtilsLabelEXT(queue);
+}
+
+// Function for naming Vulkan objects
+// In Vulkan, all objects (that can be named) are opaque unsigned 64 bit handles, and can be cased to uint64_t
+void vkUtils::setObjectDebugName(VkObjectType object_type, uint64_t object_handle, std::string object_name)
+{
+	if (!debugUtilsSupported) {
+		return;
+	}
+	VkDebugUtilsObjectNameInfoEXT name_info = { VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
+	name_info.objectType = object_type;
+	name_info.objectHandle = object_handle;
+	name_info.pObjectName = object_name.c_str();
+	vkSetDebugUtilsObjectNameEXT(vkEngine->device, &name_info);
 }
 
 void vkUtils::generateBRDFLUT(vks::Texture2D& lutBrdf)
@@ -214,6 +341,7 @@ void vkUtils::generateBRDFLUT(vks::Texture2D& lutBrdf)
 	vkDestroyDescriptorSetLayout(vkEngine->device, descriptorsetlayout, nullptr);
 	vkDestroyDescriptorPool(vkEngine->device, descriptorpool, nullptr);
 
+	setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)lutBrdf.image, "LutBRDF");
 	auto tEnd = std::chrono::high_resolution_clock::now();
 	auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
 	std::cout << "Generating BRDF LUT took " << tDiff << " ms" << std::endl;
@@ -594,6 +722,7 @@ void vkUtils::generateIrradianceCube(vks::TextureCubeMap& irradianceCube, vks::T
 	vkDestroyPipeline(vkEngine->device, pipeline, nullptr);
 	vkDestroyPipelineLayout(vkEngine->device, pipelinelayout, nullptr);
 
+	setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)irradianceCube.image, "irradianceCube");
 	auto tEnd = std::chrono::high_resolution_clock::now();
 	auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
 	std::cout << "Generating irradiance cube with " << numMips << " mip levels took " << tDiff << " ms" << std::endl;
@@ -974,23 +1103,8 @@ void vkUtils::generatePrefilteredCube(vks::TextureCubeMap& prefilteredCube, vks:
 	vkDestroyPipeline(vkEngine->device, pipeline, nullptr);
 	vkDestroyPipelineLayout(vkEngine->device, pipelinelayout, nullptr);
 
+	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)prefilteredCube.image, "prefilteredCube");
 	auto tEnd = std::chrono::high_resolution_clock::now();
 	auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
 	std::cout << "Generating pre-filtered enivornment cube with " << numMips << " mip levels took " << tDiff << " ms" << std::endl;
-}
-
-void vkUtils::SetImageDebugName(VkImage image, const char* name) {
-	static PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectName =
-		reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
-			vkGetInstanceProcAddr(vkEngine->instance, "vkSetDebugUtilsObjectNameEXT"));
-
-	if (vkSetDebugUtilsObjectName) {
-		VkDebugUtilsObjectNameInfoEXT nameInfo = {
-			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-			.objectType = VK_OBJECT_TYPE_IMAGE,
-			.objectHandle = reinterpret_cast<uint64_t>(image),
-			.pObjectName = name
-		};
-		vkSetDebugUtilsObjectName(vkEngine->device, &nameInfo);
-	}
 }

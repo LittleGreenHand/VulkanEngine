@@ -1248,6 +1248,8 @@ HWND VulkanEngineBase::setupWindow(HINSTANCE hinstance, WNDPROC wndproc)
 	ShowWindow(window, SW_SHOW);
 	SetForegroundWindow(window);
 	SetFocus(window);
+	
+	ImGui_ImplWin32_Shutdown();
 	ImGui_ImplWin32_Init(window);
 	return window;
 }

@@ -24,12 +24,12 @@ void VulkanEngine::loadAssets()
 	textures.aoMap.loadFromFile(getAssetPath() + "models/cerberus/ao.ktx", VK_FORMAT_R8_UNORM, vulkanDevice, queue);
 	textures.metallicMap.loadFromFile(getAssetPath() + "models/cerberus/metallic.ktx", VK_FORMAT_R8_UNORM, vulkanDevice, queue);
 	textures.roughnessMap.loadFromFile(getAssetPath() + "models/cerberus/roughness.ktx", VK_FORMAT_R8_UNORM, vulkanDevice, queue);
-	vkUtils::SetImageDebugName(textures.environmentCube.image, "environmentCube");
-	vkUtils::SetImageDebugName(textures.albedoMap.image, "albedoMap");
-	vkUtils::SetImageDebugName(textures.normalMap.image, "normalMap");
-	vkUtils::SetImageDebugName(textures.aoMap.image, "aoMap");
-	vkUtils::SetImageDebugName(textures.metallicMap.image, "metallicMap");
-	vkUtils::SetImageDebugName(textures.roughnessMap.image, "roughnessMap");
+	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.environmentCube.image, "environmentCube");
+	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.albedoMap.image, "albedoMap");
+	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.normalMap.image, "normalMap");
+	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.aoMap.image, "aoMap");
+	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.metallicMap.image, "metallicMap");
+	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.roughnessMap.image, "roughnessMap");
 		
 	models.skybox.loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, queue, glTFLoadingFlags);
 
@@ -48,6 +48,7 @@ void VulkanEngine::setupDescriptors()
 	};
 	VkDescriptorPoolCreateInfo descriptorPoolInfo = vks::initializers::descriptorPoolCreateInfo(poolSizes, maxConcurrentFrames * 2);
 	VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &descriptorPool));
+	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_POOL, (uint64_t)descriptorPool, "descriptorPool");
 
 	// Descriptor set layout
 	std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
@@ -64,13 +65,15 @@ void VulkanEngine::setupDescriptors()
 	};
 	VkDescriptorSetLayoutCreateInfo descriptorLayout = vks::initializers::descriptorSetLayoutCreateInfo(setLayoutBindings);
 	VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &descriptorSetLayout));
+	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)descriptorSetLayout, "descriptorSetLayout");
 
 	// Sets per frame, just like the buffers themselves
 	// Images do not need to be duplicated per frame, we reuse the same one for each frame
 	VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &descriptorSetLayout, 1);
 	for (auto i = 0; i < uniformBuffers.size(); i++) {
 		// Scene
-		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &descriptorSets[i].scene));
+		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &descriptorSets[i].scene)); 
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)descriptorSets[i].scene, "descriptorSets[" + std::to_string(i) + "].scene ");
 		std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
 			vks::initializers::writeDescriptorSet(descriptorSets[i].scene, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &uniformBuffers[i].scene.descriptor),
 			vks::initializers::writeDescriptorSet(descriptorSets[i].scene, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, &uniformBuffers[i].params.descriptor),
@@ -87,6 +90,7 @@ void VulkanEngine::setupDescriptors()
 
 		// Sky box
 		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &descriptorSets[i].skybox));
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)descriptorSets[i].skybox, "descriptorSets[" + std::to_string(i) + "].skybox ");
 		writeDescriptorSets = {
 			vks::initializers::writeDescriptorSet(descriptorSets[i].skybox, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &uniformBuffers[i].skybox.descriptor),
 			vks::initializers::writeDescriptorSet(descriptorSets[i].skybox, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, &uniformBuffers[i].params.descriptor),
@@ -109,6 +113,7 @@ void VulkanEngine::preparePipelines()
 	builder.addShaderStage(loadShader(getShadersPath() + "skybox.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
 	builder.addShaderStage(loadShader(getShadersPath() + "skybox.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
 	builder.buildPipeline(renderPass, pipelineCache, pipelineLayout, pipelines.skybox);
+	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines.skybox, "skybox pipeline");
 	builder.clearShaderStage();
 
 	// PBR pipeline
@@ -119,6 +124,7 @@ void VulkanEngine::preparePipelines()
 	builder.addShaderStage(loadShader(getShadersPath() + "pbrtexture.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
 	builder.addShaderStage(loadShader(getShadersPath() + "pbrtexture.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
 	builder.buildPipeline(renderPass, pipelineCache, pipelineLayout, pipelines.pbr);
+	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines.pbr, "pbrtexture pipeline");
 
 	auto tEnd = std::chrono::high_resolution_clock::now();
 	auto takeTime = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
@@ -155,13 +161,6 @@ void VulkanEngine::updateUniformBuffers()
 	uniformDataMatrices.model = glm::mat4(glm::mat3(camera.matrices.view));
 	memcpy(uniformBuffers[currentBuffer].skybox.mapped, &uniformDataMatrices, sizeof(UniformDataMatrices));
 
-	// PBR parameters
-	const float p = 15.0f;
-	uniformDataParams.lights[0] = glm::vec4(-p, -p * 0.5f, -p, 1.0f);
-	uniformDataParams.lights[1] = glm::vec4(-p, -p * 0.5f, p, 1.0f);
-	uniformDataParams.lights[2] = glm::vec4(p, -p * 0.5f, p, 1.0f);
-	uniformDataParams.lights[3] = glm::vec4(p, -p * 0.5f, -p, 1.0f);
-
 	memcpy(uniformBuffers[currentBuffer].params.mapped, &uniformDataParams, sizeof(UniformDataParams));
 }
 
@@ -173,9 +172,6 @@ void VulkanEngine::prepare()
 	vkUtils::generateBRDFLUT(textures.lutBrdf);
 	vkUtils::generateIrradianceCube(textures.irradianceCube, textures.environmentCube);
 	vkUtils::generatePrefilteredCube(textures.prefilteredCube, textures.environmentCube);
-	vkUtils::SetImageDebugName(textures.lutBrdf.image, "LutBRDF");
-	vkUtils::SetImageDebugName(textures.irradianceCube.image, "irradianceCube");
-	vkUtils::SetImageDebugName(textures.prefilteredCube.image, "prefilteredCube");
 	prepareUniformBuffers();
 	setupDescriptors();
 	preparePipelines();
@@ -214,15 +210,21 @@ void VulkanEngine::buildCommandBuffer()
 	// Skybox
 	if (displaySkybox)
 	{
+		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline skybox", { 1.0f, 1.0f, 1.0f });
 		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentBuffer].skybox, 0, nullptr);
 		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.skybox);
 		models.skybox.draw(cmdBuffer);
+		vkUtils::cmdEndLabel(cmdBuffer);
 	}
-	// Objects
+
+	//PBR
+	vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline PBR", { 1.0f, 1.0f, 1.0f });
 	vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentBuffer].scene, 0, nullptr);
 	vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbr);
 	models.object.draw(cmdBuffer);
-	
+	vkUtils::cmdEndLabel(cmdBuffer);
+
+	// UI
 	drawUI(cmdBuffer);
 	vkCmdEndRenderPass(cmdBuffer);
 	VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuffer));
@@ -261,6 +263,10 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 	if (ImGui::CollapsingHeader("PBR设置"), ImGuiTreeNodeFlags_DefaultOpen) {
 		ImGui::Indent();
 		{
+			ImGui::InputFloat3("光源0", (float*)uniformDataParams.lights, "%.2f");
+			ImGui::InputFloat3("光源1", (float*)(uniformDataParams.lights + 1), "%.2f");
+			ImGui::InputFloat3("光源2", (float*)(uniformDataParams.lights + 2), "%.2f");
+			ImGui::InputFloat3("光源3", (float*)(uniformDataParams.lights + 3), "%.2f");
 			ImGui::InputFloat("曝光", &uniformDataParams.exposure, 0.01f, 0.1f, "%.2f");
 			ImGui::InputFloat("Gamma", &uniformDataParams.gamma, 0.01f, 0.1f, "%.2f");
 			ImGui::SliderFloat("粗糙度", &uniformDataParams.globalRoughness, 0.01f, 1);
