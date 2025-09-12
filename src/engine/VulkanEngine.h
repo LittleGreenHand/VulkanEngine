@@ -68,7 +68,10 @@ public:
 	} uniformDataMatrices;
 
 	struct UniformDataParams {
-		glm::vec4 lights[4];
+		glm::vec4 lights[4]{ glm::vec4(-15, -15 * 0.5f, -15, 1.0f),
+							 glm::vec4(-15, -15 * 0.5f, 15, 1.0f),
+							 glm::vec4(15, -15 * 0.5f, 15, 1.0f),
+							 glm::vec4(15, -15 * 0.5f, -15, 1.0f) };
 		float exposure = 4.5f;
 		float gamma = 2.2f;
 		float globalRoughness = 1.0f;
