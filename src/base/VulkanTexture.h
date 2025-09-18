@@ -41,6 +41,7 @@ class Texture
 	uint32_t              layerCount;
 	VkDescriptorImageInfo descriptor;
 	VkSampler             sampler;
+	uint32_t			  index;
 
 	void      updateDescriptor();
 	void      destroy();

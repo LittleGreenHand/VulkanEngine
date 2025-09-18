@@ -291,6 +291,16 @@ namespace vks
 		}
 
 		inline VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo(
+			const std::vector<VkDescriptorSetLayout>& pSetLayouts)
+		{
+			VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo {};
+			pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+			pipelineLayoutCreateInfo.setLayoutCount = static_cast<uint32_t>(pSetLayouts.size());
+			pipelineLayoutCreateInfo.pSetLayouts = pSetLayouts.data();
+			return pipelineLayoutCreateInfo;
+		}
+
+		inline VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo(
 			uint32_t setLayoutCount = 1)
 		{
 			VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};

@@ -15,15 +15,23 @@ void VulkanEngine::getEnabledFeatures()
 void VulkanEngine::loadAssets()
 {
 	auto tStart = std::chrono::high_resolution_clock::now();
+	//加载GLTF数据时需要创建材质描述符，因此需要提前创建材质描述符集布局
+	vkglTF::createMaterialDescriptorSetLayout(vulkanDevice->logicalDevice, MaterialDescriptorSetLayout);
 
 	uint32_t glTFLoadingFlags = vkglTF::FileLoadingFlags::PreTransformVertices | vkglTF::FileLoadingFlags::PreMultiplyVertexColors | vkglTF::FileLoadingFlags::FlipY;
-	models.object.loadFromFile(getAssetPath() + "models/cerberus/cerberus.gltf", vulkanDevice, queue, glTFLoadingFlags);
+	models.cerberus.loadFromFile(getAssetPath() + "models/cerberus/cerberus.gltf", vulkanDevice, queue, glTFLoadingFlags);
 	textures.environmentCube.loadFromFile(getAssetPath() + "textures/hdr/gcanyon_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
 	textures.albedoMap.loadFromFile(getAssetPath() + "models/cerberus/albedo.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
 	textures.normalMap.loadFromFile(getAssetPath() + "models/cerberus/normal.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
 	textures.aoMap.loadFromFile(getAssetPath() + "models/cerberus/ao.ktx", VK_FORMAT_R8_UNORM, vulkanDevice, queue);
 	textures.metallicMap.loadFromFile(getAssetPath() + "models/cerberus/metallic.ktx", VK_FORMAT_R8_UNORM, vulkanDevice, queue);
 	textures.roughnessMap.loadFromFile(getAssetPath() + "models/cerberus/roughness.ktx", VK_FORMAT_R8_UNORM, vulkanDevice, queue);
+	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.setBaseColorTexture(&textures.albedoMap);
+	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.setNormalTexture(&textures.normalMap);
+	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.setAOTexture(&textures.aoMap);
+	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.setMetallicTexture(&textures.metallicMap);
+	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.setRoughnessTexture(&textures.roughnessMap);
+	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.updateDescriptorSet();
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.environmentCube.image, "environmentCube");
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.albedoMap.image, "albedoMap");
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.normalMap.image, "normalMap");
@@ -32,6 +40,7 @@ void VulkanEngine::loadAssets()
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.roughnessMap.image, "roughnessMap");
 		
 	models.skybox.loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, queue, glTFLoadingFlags);
+	models.sponza.loadFromFile(getAssetPath() + "models/sponza/sponza.gltf", vulkanDevice, queue, glTFLoadingFlags);
 
 	auto tEnd = std::chrono::high_resolution_clock::now(); 
 	auto takeTime = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
@@ -41,90 +50,118 @@ void VulkanEngine::loadAssets()
 
 void VulkanEngine::setupDescriptors()
 {
-	// Descriptor Pool
-	std::vector<VkDescriptorPoolSize> poolSizes = {
-		vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, maxConcurrentFrames * 4),
+	lights.preperDescriptor(vulkanDevice);
+
+	// 创建DescriptorPool
+	{
+		std::vector<VkDescriptorPoolSize> poolSizes = {
+		vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, maxConcurrentFrames * 8),
 		vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, maxConcurrentFrames * 16)
-	};
-	VkDescriptorPoolCreateInfo descriptorPoolInfo = vks::initializers::descriptorPoolCreateInfo(poolSizes, maxConcurrentFrames * 2);
-	VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &descriptorPool));
-	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_POOL, (uint64_t)descriptorPool, "descriptorPool");
-
-	// Descriptor set layout
-	std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-		vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0),
-		vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1),
-		vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 2),
-		vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 3),
-		vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 4),
-		vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 5),
-		vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 6),
-		vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 7),
-		vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 8),
-		vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 9),
-	};
-	VkDescriptorSetLayoutCreateInfo descriptorLayout = vks::initializers::descriptorSetLayoutCreateInfo(setLayoutBindings);
-	VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &descriptorSetLayout));
-	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)descriptorSetLayout, "descriptorSetLayout");
-
-	// Sets per frame, just like the buffers themselves
-	// Images do not need to be duplicated per frame, we reuse the same one for each frame
-	VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &descriptorSetLayout, 1);
-	for (auto i = 0; i < uniformBuffers.size(); i++) {
-		// Scene
-		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &descriptorSets[i].scene)); 
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)descriptorSets[i].scene, "descriptorSets[" + std::to_string(i) + "].scene ");
-		std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
-			vks::initializers::writeDescriptorSet(descriptorSets[i].scene, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &uniformBuffers[i].scene.descriptor),
-			vks::initializers::writeDescriptorSet(descriptorSets[i].scene, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, &uniformBuffers[i].params.descriptor),
-			vks::initializers::writeDescriptorSet(descriptorSets[i].scene, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2, &textures.irradianceCube.descriptor),
-			vks::initializers::writeDescriptorSet(descriptorSets[i].scene, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3, &textures.lutBrdf.descriptor),
-			vks::initializers::writeDescriptorSet(descriptorSets[i].scene, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4, &textures.prefilteredCube.descriptor),
-			vks::initializers::writeDescriptorSet(descriptorSets[i].scene, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5, &textures.albedoMap.descriptor),
-			vks::initializers::writeDescriptorSet(descriptorSets[i].scene, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 6, &textures.normalMap.descriptor),
-			vks::initializers::writeDescriptorSet(descriptorSets[i].scene, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 7, &textures.aoMap.descriptor),
-			vks::initializers::writeDescriptorSet(descriptorSets[i].scene, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8, &textures.metallicMap.descriptor),
-			vks::initializers::writeDescriptorSet(descriptorSets[i].scene, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 9, &textures.roughnessMap.descriptor),
 		};
-		vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
+		VkDescriptorPoolCreateInfo descriptorPoolInfo = vks::initializers::descriptorPoolCreateInfo(poolSizes, maxConcurrentFrames * 2);
+		VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &descriptorPool));
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_POOL, (uint64_t)descriptorPool, "MainDescriptorPool");
+	}
+	
+	// 创建DescriptorSetLayout
+	{
+		VkDescriptorSetLayoutCreateInfo descriptorLayoutCI = vks::initializers::descriptorSetLayoutCreateInfo(nullptr, 0);
+		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &emptyDescriptorLayout));
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)emptyDescriptorLayout, "emptyDescriptorLayout");
 
-		// Sky box
-		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &descriptorSets[i].skybox));
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)descriptorSets[i].skybox, "descriptorSets[" + std::to_string(i) + "].skybox ");
-		writeDescriptorSets = {
-			vks::initializers::writeDescriptorSet(descriptorSets[i].skybox, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &uniformBuffers[i].skybox.descriptor),
-			vks::initializers::writeDescriptorSet(descriptorSets[i].skybox, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, &uniformBuffers[i].params.descriptor),
-			vks::initializers::writeDescriptorSet(descriptorSets[i].skybox, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2, &textures.environmentCube.descriptor),
-		};
-		vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
+		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
+			vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0)};
+		descriptorLayoutCI = vks::initializers::descriptorSetLayoutCreateInfo(setLayoutBindings);
+		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &globalParamDescriptorSetLayout));
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)globalParamDescriptorSetLayout, "globalParamDescriptorSetLayout");
+
+		setLayoutBindings.clear();
+		setLayoutBindings.push_back(vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0));
+		setLayoutBindings.push_back(vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1));
+		setLayoutBindings.push_back(vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 2));
+		setLayoutBindings.push_back(vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 3));
+		descriptorLayoutCI = vks::initializers::descriptorSetLayoutCreateInfo(setLayoutBindings);
+		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &IBLDescriptorLayout));
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)IBLDescriptorLayout, "IBLDescriptorLayout");
+	}
+
+	// 创建DescriptorSet
+	{
+		//全局参数
+		for (auto i = 0; i < frameDescriptorSets.size(); i++) {
+			// 分配描述符集
+			VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &globalParamDescriptorSetLayout, 1);
+			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &frameDescriptorSets[i].globalParamDescriptorSet));
+			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)frameDescriptorSets[i].globalParamDescriptorSet, "frameDescriptorSets[" + std::to_string(i) + "].globalParamDescriptorSet ");
+
+			// 更新描述符集
+			std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
+				vks::initializers::writeDescriptorSet(frameDescriptorSets[i].globalParamDescriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &globalParamBuffers[i].globalParamBuffer.descriptor) };
+			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
+		}
+
+		//IBL贴图
+		{
+			// 分配描述符集
+			VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &IBLDescriptorLayout, 1);
+			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &IBLDescriptorSet));
+			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)IBLDescriptorSet, "IBLDescriptorSet ");
+
+			// 更新描述符集
+			std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
+				vks::initializers::writeDescriptorSet(IBLDescriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &textures.irradianceCube.descriptor),
+				vks::initializers::writeDescriptorSet(IBLDescriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &textures.prefilteredCube.descriptor),
+				vks::initializers::writeDescriptorSet(IBLDescriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2, &textures.lutBrdf.descriptor),
+				vks::initializers::writeDescriptorSet(IBLDescriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3, &textures.environmentCube.descriptor)
+			};
+			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
+		}
 	}
 }
 
 void VulkanEngine::preparePipelines()
 {
 	auto tStart = std::chrono::high_resolution_clock::now();
-	PipelineBuilder builder(device);
 
-	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(&descriptorSetLayout, 1);
-	VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
+	//skybox pipeline
+	{
+		PipelineBuilder builder(device);
+		std::vector<VkDescriptorSetLayout> setLayouts;
+		setLayouts.resize(2);
+		setLayouts[LBI_GLOBAL] = globalParamDescriptorSetLayout;
+		setLayouts[LBI_IBL] = IBLDescriptorLayout;
+		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(setLayouts);
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines.skyboxPipelineLayout));
 
-	// Skybox pipeline
-	builder.rasterizationState.cullMode = VK_CULL_MODE_FRONT_BIT;
-	builder.addShaderStage(loadShader(getShadersPath() + "skybox.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
-	builder.addShaderStage(loadShader(getShadersPath() + "skybox.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
-	builder.buildPipeline(renderPass, pipelineCache, pipelineLayout, pipelines.skybox);
-	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines.skybox, "skybox pipeline");
-	builder.clearShaderStage();
+		// Skybox pipeline
+		builder.rasterizationState.cullMode = VK_CULL_MODE_FRONT_BIT;
+		builder.addShaderStage(loadShader(getShadersPath() + "skybox.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
+		builder.addShaderStage(loadShader(getShadersPath() + "skybox.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
+		builder.buildPipeline(renderPass, pipelineCache, pipelines.skyboxPipelineLayout, pipelines.skybox);
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines.skybox, "skybox pipeline");
+	}
 
 	// PBR pipeline
-	builder.rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
-	//启用深度测试与写入
-	builder.depthStencilState.depthWriteEnable = VK_TRUE;
-	builder.depthStencilState.depthTestEnable = VK_TRUE;
-	builder.addShaderStage(loadShader(getShadersPath() + "pbrtexture.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
-	builder.addShaderStage(loadShader(getShadersPath() + "pbrtexture.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
-	builder.buildPipeline(renderPass, pipelineCache, pipelineLayout, pipelines.pbr);
-	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines.pbr, "pbrtexture pipeline");
+	{
+		PipelineBuilder builder(device);
+		std::vector<VkDescriptorSetLayout> setLayouts;
+		setLayouts.resize(LBI_COUNT);
+		setLayouts[LBI_GLOBAL] = globalParamDescriptorSetLayout;
+		setLayouts[LBI_IBL] = IBLDescriptorLayout;
+		setLayouts[LBI_LIGHTS] = lights.descriptorSetLayout;
+		setLayouts[LBI_MATERIALS] = vkglTF::MaterialDescriptorSetLayout;
+		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(setLayouts);
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines.pbrPipelineLayout));
+
+		builder.rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
+		//启用深度测试与写入
+		builder.depthStencilState.depthWriteEnable = VK_TRUE;
+		builder.depthStencilState.depthTestEnable = VK_TRUE;
+		builder.addShaderStage(loadShader(getShadersPath() + "PBRRender.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
+		builder.addShaderStage(loadShader(getShadersPath() + "PBRRender.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
+		builder.buildPipeline(renderPass, pipelineCache, pipelines.pbrPipelineLayout, pipelines.pbr);
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines.pbr, "PBRRender pipeline");
+	}
 
 	auto tEnd = std::chrono::high_resolution_clock::now();
 	auto takeTime = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
@@ -133,35 +170,20 @@ void VulkanEngine::preparePipelines()
 
 void VulkanEngine::prepareUniformBuffers()
 {
-	for (auto& buffer : uniformBuffers) {
+	for (auto& buffer : globalParamBuffers) {
 		// Scene matrices uniform buffer
-		VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &buffer.scene, sizeof(UniformDataMatrices)));
-		VK_CHECK_RESULT(buffer.scene.map());
-		// Skybox matrices uniform buffer
-		VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &buffer.skybox, sizeof(UniformDataMatrices)));
-		VK_CHECK_RESULT(buffer.skybox.map());
-		// Shared parameter uniform buffer
-		VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &buffer.params, sizeof(UniformDataParams)));
-		VK_CHECK_RESULT(buffer.params.map());
+		VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &buffer.globalParamBuffer, sizeof(globalParam)));
+		VK_CHECK_RESULT(buffer.globalParamBuffer.map());
 	}
 }
 
 void VulkanEngine::updateUniformBuffers()
 {
 	// 3D object
-	uniformDataMatrices.projection = camera.matrices.perspective;
-	uniformDataMatrices.view = camera.matrices.view;
-	//uniformDataMatrices.model = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	uniformDataMatrices.model = glm::mat4(1);
-	uniformDataMatrices.camPos = camera.position * -1.0f;
-	//uniformDataMatrices.camPos = camera.viewPos;
-	memcpy(uniformBuffers[currentBuffer].scene.mapped, &uniformDataMatrices, sizeof(UniformDataMatrices));
-
-	// Skybox
-	uniformDataMatrices.model = glm::mat4(glm::mat3(camera.matrices.view));
-	memcpy(uniformBuffers[currentBuffer].skybox.mapped, &uniformDataMatrices, sizeof(UniformDataMatrices));
-
-	memcpy(uniformBuffers[currentBuffer].params.mapped, &uniformDataParams, sizeof(UniformDataParams));
+	globalParam.view = camera.matrices.view;
+	globalParam.projection = camera.matrices.perspective;
+	globalParam.camPos = camera.position * -1.0f;
+	memcpy(globalParamBuffers[currentBuffer].globalParamBuffer.mapped, &globalParam, sizeof(GlobalParams));
 }
 
 void VulkanEngine::prepare()
@@ -207,21 +229,27 @@ void VulkanEngine::buildCommandBuffer()
 	vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
 	vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
+	const int descriptorSetCount = 3;
+	std::vector<VkDescriptorSet> descriptorSetsArray(descriptorSetCount);
+	descriptorSetsArray[LBI_GLOBAL] = frameDescriptorSets[currentBuffer].globalParamDescriptorSet;
+	descriptorSetsArray[LBI_IBL] = IBLDescriptorSet;
+	descriptorSetsArray[LBI_LIGHTS] = lights.descriptorSet;
 	// Skybox
 	if (displaySkybox)
 	{
 		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline skybox", { 1.0f, 1.0f, 1.0f });
-		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentBuffer].skybox, 0, nullptr);
 		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.skybox);
-		models.skybox.draw(cmdBuffer);
+		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.skyboxPipelineLayout, 0, 2, descriptorSetsArray.data(), 0, nullptr);
+		models.skybox.draw(cmdBuffer);//不需要绑定材质描述符集
 		vkUtils::cmdEndLabel(cmdBuffer);
 	}
 
 	//PBR
 	vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline PBR", { 1.0f, 1.0f, 1.0f });
-	vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentBuffer].scene, 0, nullptr);
 	vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbr);
-	models.object.draw(cmdBuffer);
+	vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbrPipelineLayout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
+	models.cerberus.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout, LBI_MATERIALS);
+	models.sponza.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout, LBI_MATERIALS);
 	vkUtils::cmdEndLabel(cmdBuffer);
 
 	// UI
@@ -263,14 +291,14 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 	if (ImGui::CollapsingHeader("PBR设置"), ImGuiTreeNodeFlags_DefaultOpen) {
 		ImGui::Indent();
 		{
-			ImGui::InputFloat3("光源0", (float*)uniformDataParams.lights, "%.2f");
-			ImGui::InputFloat3("光源1", (float*)(uniformDataParams.lights + 1), "%.2f");
-			ImGui::InputFloat3("光源2", (float*)(uniformDataParams.lights + 2), "%.2f");
-			ImGui::InputFloat3("光源3", (float*)(uniformDataParams.lights + 3), "%.2f");
-			ImGui::InputFloat("曝光", &uniformDataParams.exposure, 0.01f, 0.1f, "%.2f");
-			ImGui::InputFloat("Gamma", &uniformDataParams.gamma, 0.01f, 0.1f, "%.2f");
-			ImGui::SliderFloat("粗糙度", &uniformDataParams.globalRoughness, 0.01f, 1);
-			ImGui::SliderFloat("金属度", &uniformDataParams.globalMetallic, 0.01f, 1);
+			ImGui::InputFloat3("光源0", (float*)&lights.lightData.lights[0].position, "%.2f");
+			ImGui::InputFloat3("光源1", (float*)&lights.lightData.lights[1].position, "%.2f");
+			ImGui::InputFloat3("光源2", (float*)&lights.lightData.lights[2].position, "%.2f");
+			ImGui::InputFloat3("光源3", (float*)&lights.lightData.lights[3].position, "%.2f");
+			ImGui::InputFloat("曝光", &globalParam.exposure, 0.01f, 0.1f, "%.2f");
+			ImGui::InputFloat("Gamma", &globalParam.gamma, 0.01f, 0.1f, "%.2f");
+			ImGui::SliderFloat("粗糙度", &globalParam.globalRoughness, 0.01f, 1);
+			ImGui::SliderFloat("金属度", &globalParam.globalMetallic, 0.01f, 1);
 			ImGui::Checkbox("Skybox", &displaySkybox);
 		}
 		ImGui::Unindent();

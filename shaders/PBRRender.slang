@@ -1,13 +1,6 @@
-// Copyright 2020 Google LLC
-
-struct VSInput
-{
-    float3 Pos;
-    float3 Normal;
-    float2 UV;
-    float3 Color;
-    float4 Tangent;
-};
+import "Binding_Global.slang";
+import "Binding_Light.slang";
+import "Binding_Material.slang";
 
 struct VSOutput
 {
@@ -18,35 +11,13 @@ struct VSOutput
     float3 Tangent;
 };
 
-struct UBO  {
-	float4x4 projection;
+struct UBO{
 	float4x4 model;
-	float4x4 view;
-	float3 camPos;
 };
-ConstantBuffer<UBO> ubo;
-
-struct UBOParams {
-	float4 lights[4];
-    float exposure;
-    float gamma;
-    float globalRoughness;
-    float globalMetallic;
-};
-ConstantBuffer<UBOParams> uboParams;
-
-SamplerCube samplerIrradiance;
-Sampler2D samplerBRDFLUT;
-SamplerCube prefilteredMapSampler;
-
-Sampler2D albedoMapSampler;
-Sampler2D normalMapSampler;
-Sampler2D aoMapSampler;
-Sampler2D metallicMapSampler;
-Sampler2D roughnessMapSampler;
+//ConstantBuffer<UBO> ubo;
 
 #define PI 3.1415926535897932384626433832795
-#define ALBEDO(uv) pow(albedoMapSampler.Sample(uv).rgb, float3(2.2, 2.2, 2.2))
+#define ALBEDO(uv) pow(baseColorTexture.Sample(uv).rgb, float3(2.2, 2.2, 2.2))
 
 // From http://filmicgames.com/archives/75
 float3 Uncharted2Tonemap(float3 x)
@@ -130,7 +101,7 @@ float3 specularContribution(float2 inUV, float3 L, float3 V, float3 N, float3 F0
 
 float3 calculateNormal(VSOutput input)
 {
-    float3 tangentNormal = normalMapSampler.Sample(input.UV).xyz * 2.0 - 1.0;
+    float3 tangentNormal = normalTexture.Sample(input.UV).xyz * 2.0 - 1.0;
 
 	float3 N = normalize(input.Normal);
 	float3 T = normalize(input.Tangent);
@@ -143,13 +114,18 @@ float3 calculateNormal(VSOutput input)
 [shader("vertex")]
 VSOutput vertexMain(VSInput input)
 {
+    UBO ubo;
+    ubo.model = float4x4(1.0, 0.0, 0.0, 0.0,
+                         0.0, 1.0, 0.0, 0.0,
+                         0.0, 0.0, 1.0, 0.0,
+                         0.0, 0.0, 0.0, 1.0);
 	VSOutput output;
 	float3 locPos = mul(ubo.model, float4(input.Pos, 1.0)).xyz;
 	output.WorldPos = locPos;
 	output.Normal = mul((float3x3)ubo.model, input.Normal);
 	output.Tangent = mul((float3x3)ubo.model, input.Tangent.xyz);
 	output.UV = input.UV;
-	output.Pos = mul(ubo.projection, mul(ubo.view, float4(output.WorldPos, 1.0)));
+	output.Pos = mul(globalParams.projection, mul(globalParams.view, float4(output.WorldPos, 1.0)));
 	return output;
 }
 
@@ -157,18 +133,18 @@ VSOutput vertexMain(VSInput input)
 float4 fragmentMain(VSOutput input)
 {
 	float3 N = calculateNormal(input);
-	float3 V = normalize(ubo.camPos - input.WorldPos);
+	float3 V = normalize(globalParams.camPos - input.WorldPos);
 	float3 R = reflect(-V, N);
 
-    float metallic = metallicMapSampler.Sample(input.UV).r * uboParams.globalMetallic;
-    float roughness = roughnessMapSampler.Sample(input.UV).r * uboParams.globalRoughness;
+    float metallic = metallicTexture.Sample(input.UV).r * globalParams.globalMetallic;
+    float roughness = roughnessTexture.Sample(input.UV).r * globalParams.globalRoughness;
 
 	float3 F0 = float3(0.04, 0.04, 0.04);
 	F0 = lerp(F0, ALBEDO(input.UV), metallic);
 
-	float3 Lo = float3(0.0, 0.0, 0.0);
-	for(int i = 0; i < 4; i++) {
-		float3 L = normalize(uboParams.lights[i].xyz - input.WorldPos);
+    float3 Lo = float3(0.0, 0.0, 0.0);
+    for (int i = 0; i < lightParameter.activeLightCount; i++) {
+		float3 L = normalize(lightParameter.lights[i].position.xyz - input.WorldPos);
 		Lo += specularContribution(input.UV, L, V, N, F0, metallic, roughness);
 	}
 
@@ -187,15 +163,15 @@ float4 fragmentMain(VSOutput input)
 	// Ambient part
 	float3 kD = 1.0 - F;
     kD *= 1.0 - metallic;
-    float3 ambient = (kD * diffuse + specular) * aoMapSampler.Sample(input.UV).rrr;
+    float3 ambient = (kD * diffuse + specular) * AOTexture.Sample(input.UV).rrr;
 
 	float3 color = ambient + Lo;
 
 	// Tone mapping
-	color = Uncharted2Tonemap(color * uboParams.exposure);
+	color = Uncharted2Tonemap(color * globalParams.exposure);
 	color = color * (1.0f / Uncharted2Tonemap((11.2f).xxx));
 	// Gamma correction
-	color = pow(color, (1.0f / uboParams.gamma).xxx);
+	color = pow(color, (1.0f / globalParams.gamma).xxx);
 
 	return float4(color, 1.0);
 }

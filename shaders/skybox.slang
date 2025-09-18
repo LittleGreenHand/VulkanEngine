@@ -1,15 +1,4 @@
-/* Copyright (c) 2025, Sascha Willems
- *
- * SPDX-License-Identifier: MIT
- *
- */
-
-struct VSInput
-{
-    float3 Pos;
-    float3 Normal;
-    float2 UV;
-};
+#include "Binding_Global.slang"
 
 struct VSOutput
 {
@@ -17,21 +6,21 @@ struct VSOutput
     float3 UVW;
 };
 
-struct UBO
-{
-    float4x4 projection;
-    float4x4 model;
-};
-ConstantBuffer<UBO> ubo;
+//struct UBO
+//{
+//    float4x4 projection;
+//    float4x4 model;
+//};
+//ConstantBuffer<UBO> ubo;
 
-struct UBOParams {
-	float4 lights[4];
-	float exposure;
-	float gamma;
-};
-ConstantBuffer<UBOParams> uboParams;
+//struct UBOParams {
+//	float4 lights[4];
+//	float exposure;
+//	float gamma;
+//};
+//ConstantBuffer<UBOParams> uboParams;
 
-SamplerCube samplerEnv;
+//SamplerCube samplerEnv;
 
 // From http://filmicworlds.com/blog/filmic-tonemapping-operators/
 float3 Uncharted2Tonemap(float3 color)
@@ -49,10 +38,15 @@ float3 Uncharted2Tonemap(float3 color)
 [shader("vertex")]
 VSOutput vertexMain(VSInput input)
 {
+    float4x4 model = globalParams.view;
+    //移除位置信息
+    model[0][3] = 0;
+    model[1][3] = 0;
+    model[2][3] = 0;
     VSOutput output;
     output.UVW = input.Pos;
-    //output.UVW.y = -output.UVW.y;
-    output.Pos = mul(ubo.projection, mul(ubo.model, float4(input.Pos.xyz, 1.0)));
+    // output.UVW.y = -output.UVW.y;
+    output.Pos = mul(globalParams.projection, mul(model, float4(input.Pos.xyz, 1.0)));
     return output;
 }
 
@@ -61,11 +55,11 @@ float4 fragmentMain(VSOutput input)
 {
     float3 color = samplerEnv.Sample(input.UVW).rgb;
 
-	// Tone mapping
-	color = Uncharted2Tonemap(color * uboParams.exposure);
+    // Tone mapping
+    color = Uncharted2Tonemap(color * globalParams.exposure);
 	color = color * (1.0f / Uncharted2Tonemap((11.2f).xxx));
-	// Gamma correction
-	color = pow(color, (1.0f / uboParams.gamma).xxx);
+    // Gamma correction
+    color = pow(color, (1.0f / globalParams.gamma).xxx);
 
 	return float4(color, 1.0);
 }

@@ -1,14 +1,3 @@
-/*
-* Vulkan Example - Basic indexed triangle rendering using Vulkan 1.3
-*
-* Note:
-* This is a variation of the the triangle sample that makes use of Vulkan 1.3 features
-* This simplifies the api a bit, esp. with dynamic rendering replacing render passes (and with that framebuffers)
-*
-* Copyright (C) 2024-2025 by Sascha Willems - www.saschawillems.de
-*
-* This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
-*/
 #pragma once
 
 #include <stdio.h>
@@ -28,11 +17,21 @@
 #include "vulkanEngineBase.h"
 #include "VulkanglTFModel.h"
 #include "PipelineBuilder.h"
+#include "VulkanLights.h"
 
+//不同类型的描述符的set编号
+enum LayoutBindIndex {
+	LBI_GLOBAL = 0,
+	LBI_IBL,
+	LBI_LIGHTS,
+	LBI_MATERIALS,
+	LBI_COUNT
+};
 class VulkanEngine : public VulkanEngineBase
 {
 public:
 	bool displaySkybox = true;
+	VulkanLights lights;
 
 	struct Textures {
 		vks::TextureCubeMap environmentCube;
@@ -50,46 +49,43 @@ public:
 
 	struct Meshes {
 		vkglTF::Model skybox;
-		vkglTF::Model object;
+		vkglTF::Model cerberus;
+		vkglTF::Model sponza;
 	} models;
 
 	struct UniformBuffers {
-		vks::Buffer scene;
-		vks::Buffer skybox;
-		vks::Buffer params;
+		vks::Buffer globalParamBuffer;
 	};
-	std::array<UniformBuffers, maxConcurrentFrames> uniformBuffers;
+	std::array<UniformBuffers, maxConcurrentFrames> globalParamBuffers;
 
-	struct UniformDataMatrices {
-		glm::mat4 projection;
-		glm::mat4 model;
+	struct GlobalParams {
 		glm::mat4 view;
+		glm::mat4 projection;
 		glm::vec3 camPos;
-	} uniformDataMatrices;
-
-	struct UniformDataParams {
-		glm::vec4 lights[4]{ glm::vec4(-15, -15 * 0.5f, -15, 1.0f),
-							 glm::vec4(-15, -15 * 0.5f, 15, 1.0f),
-							 glm::vec4(15, -15 * 0.5f, 15, 1.0f),
-							 glm::vec4(15, -15 * 0.5f, -15, 1.0f) };
 		float exposure = 4.5f;
 		float gamma = 2.2f;
 		float globalRoughness = 1.0f;
 		float globalMetallic = 1.0f;
-	} uniformDataParams;
+	} globalParam;
 
-	VkPipelineLayout pipelineLayout{ VK_NULL_HANDLE };
 	struct {
+		VkPipelineLayout skyboxPipelineLayout{ VK_NULL_HANDLE };
 		VkPipeline skybox{ VK_NULL_HANDLE };
+
+		VkPipelineLayout pbrPipelineLayout{ VK_NULL_HANDLE };
 		VkPipeline pbr{ VK_NULL_HANDLE };
 	} pipelines;
 
-	VkDescriptorSetLayout descriptorSetLayout{ VK_NULL_HANDLE };
-	struct DescriptorSets {
-		VkDescriptorSet scene{ VK_NULL_HANDLE };
-		VkDescriptorSet skybox{ VK_NULL_HANDLE };
+	VkDescriptorSetLayout MaterialDescriptorSetLayout{ VK_NULL_HANDLE };
+	VkDescriptorSetLayout globalParamDescriptorSetLayout{ VK_NULL_HANDLE };
+	VkDescriptorSetLayout IBLDescriptorLayout{ VK_NULL_HANDLE };
+	VkDescriptorSet IBLDescriptorSet{ VK_NULL_HANDLE };
+	struct Descriptor {
+		VkDescriptorSet globalParamDescriptorSet{ VK_NULL_HANDLE };
 	};
-	std::array<DescriptorSets, maxConcurrentFrames> descriptorSets{};
+	VkDescriptorSetLayout emptyDescriptorLayout{ VK_NULL_HANDLE };
+
+	std::array<Descriptor, maxConcurrentFrames> frameDescriptorSets{};
 	VkPhysicalDeviceVulkan11Features vulkan11Features{};
 
 	VulkanEngine() : VulkanEngineBase()
@@ -105,11 +101,12 @@ public:
 
 	~VulkanEngine()
 	{
+		lights.destroy();
 		if (device) {
 			vkDestroyPipeline(device, pipelines.skybox, nullptr);
 			vkDestroyPipeline(device, pipelines.pbr, nullptr);
-			vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-			vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+			vkDestroyPipelineLayout(device, pipelines.pbrPipelineLayout, nullptr);
+			vkDestroyPipelineLayout(device, pipelines.skyboxPipelineLayout, nullptr);
 			textures.environmentCube.destroy();
 			textures.irradianceCube.destroy();
 			textures.prefilteredCube.destroy();
@@ -119,11 +116,13 @@ public:
 			textures.aoMap.destroy();
 			textures.metallicMap.destroy();
 			textures.roughnessMap.destroy();
-			for (auto& buffer : uniformBuffers) {
-				buffer.scene.destroy();
-				buffer.params.destroy();
-				buffer.skybox.destroy();
+			for (auto& buffer : globalParamBuffers) {
+				buffer.globalParamBuffer.destroy();
 			}
+			vkDestroyDescriptorSetLayout(device, MaterialDescriptorSetLayout, nullptr);
+			vkDestroyDescriptorSetLayout(device, globalParamDescriptorSetLayout, nullptr);
+			vkDestroyDescriptorSetLayout(device, IBLDescriptorLayout, nullptr);
+			vkDestroyDescriptorSetLayout(device, emptyDescriptorLayout, nullptr);
 		}
 	}
 

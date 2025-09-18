@@ -22,6 +22,7 @@
 
 #include "vulkan/vulkan.h"
 #include "VulkanDevice.h"
+#include "VulkanTexture.h"
 
 #include <ktx.h>
 #include <ktxvulkan.h>
@@ -44,37 +45,57 @@
 
 namespace vkglTF
 {
-	enum DescriptorBindingFlags {
-		ImageBaseColor = 0x00000001,
-		ImageNormalMap = 0x00000002
-	};
-
-	extern VkDescriptorSetLayout descriptorSetLayoutImage;
+	extern VkDescriptorSetLayout MaterialDescriptorSetLayout;
 	extern VkDescriptorSetLayout descriptorSetLayoutUbo;
 	extern VkMemoryPropertyFlags memoryPropertyFlags;
 	extern uint32_t descriptorBindingFlags;
 
 	struct Node;
 
-	/*
-		glTF texture loading class
-	*/
-	struct Texture {
-		vks::VulkanDevice* device = nullptr;
-		VkImage image;
-		VkImageLayout imageLayout;
-		VkDeviceMemory deviceMemory;
-		VkImageView view;
-		uint32_t width, height;
-		uint32_t mipLevels;
-		uint32_t layerCount;
-		VkDescriptorImageInfo descriptor;
-		VkSampler sampler;
-		uint32_t index;
-		void updateDescriptor();
-		void destroy();
-		void fromglTfImage(tinygltf::Image& gltfimage, std::string path, vks::VulkanDevice* device, VkQueue copyQueue);
+	enum DescriptorBindingFlags {
+		baseColorTexture = 0x00000001,
+		normalTexture = baseColorTexture * 2,
+		metallicRoughnessTexture = normalTexture * 2,
+		metallicTexture = metallicRoughnessTexture * 2,
+		RoughnessTexture = metallicTexture * 2,
+		occlusionTexture = RoughnessTexture * 2,
+		emissiveTexture = occlusionTexture * 2,
+		AOTexture = emissiveTexture * 2,
+		diffuseTexture = AOTexture * 2,
+		specularGlossinessTexture = diffuseTexture * 2,
+		allTexture = specularGlossinessTexture * 2 - 1
 	};
+	enum DescriptorImageBindingIndex {
+		baseColorTextureIndex = 1,
+		normalTextureIndex,
+		metallicRoughnessTextureIndex,
+		metallicTextureIndex,
+		RoughnessTextureIndex,
+		occlusionTextureIndex,
+		emissiveTextureIndex,
+		AOTextureIndex,
+		diffuseTextureIndex,
+		specularGlossinessTextureIndex
+	};
+
+	//static VkDescriptorSetLayout MaterialDescriptorSetLayout = VK_NULL_HANDLE;
+	const uint32_t imageDescriptorBindingCount = 10;
+	static void createMaterialDescriptorSetLayout(VkDevice device, VkDescriptorSetLayout& materialDescriptorSetLayout) {
+		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings{};
+		//这个缓冲区用于存储材质参数
+		setLayoutBindings.push_back(vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 0));
+
+		for (int i = 0; i < imageDescriptorBindingCount; i++)
+		{
+			setLayoutBindings.push_back(vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, i + 1));
+		}
+		VkDescriptorSetLayoutCreateInfo descriptorLayoutCI{};
+		descriptorLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		descriptorLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
+		descriptorLayoutCI.pBindings = setLayoutBindings.data();
+		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &MaterialDescriptorSetLayout));
+		materialDescriptorSetLayout = MaterialDescriptorSetLayout;
+	}
 
 	/*
 		glTF material class
@@ -83,23 +104,97 @@ namespace vkglTF
 		vks::VulkanDevice* device = nullptr;
 		enum AlphaMode { ALPHAMODE_OPAQUE, ALPHAMODE_MASK, ALPHAMODE_BLEND };
 		AlphaMode alphaMode = ALPHAMODE_OPAQUE;
-		float alphaCutoff = 1.0f;
-		float metallicFactor = 1.0f;
-		float roughnessFactor = 1.0f;
-		glm::vec4 baseColorFactor = glm::vec4(1.0f);
-		vkglTF::Texture* baseColorTexture = nullptr;
-		vkglTF::Texture* metallicRoughnessTexture = nullptr;
-		vkglTF::Texture* normalTexture = nullptr;
-		vkglTF::Texture* occlusionTexture = nullptr;
-		vkglTF::Texture* emissiveTexture = nullptr;
+		struct MaterialParameters
+		{
+			float alphaCutoff = 1.0f;
+			float metallicFactor = 1.0f;
+			float roughnessFactor = 1.0f;
+			glm::vec4 baseColorFactor = glm::vec4(1.0f);
+			bool baseColorTextureEmpty = true;
+			bool normalTextureEmpty = true;
+			bool mergeMetallicRoughnessTexture = true;
+			bool metallicRoughnessTextureEmpty = true;
+			bool metallicTextureEmpty = true;
+			bool roughnessTextureEmpty = true;
+			bool occlusionTextureEmpty = true;
+			bool emissiveTextureEmpty = true;
+			bool AOTextureEmpty = true;
+			bool diffuseTextureEmpty = true;
+			bool specularGlossinessTextureEmpty = true;
+		}materialParameters;
+		vks::Buffer MaterialParametersBuffer;
+		vks::Texture* baseColorTexture = nullptr;
+		vks::Texture* normalTexture = nullptr;
+		vks::Texture* metallicRoughnessTexture = nullptr;
+		vks::Texture* metallicTexture = nullptr;
+		vks::Texture* roughnessTexture = nullptr;
+		vks::Texture* occlusionTexture = nullptr;
+		vks::Texture* emissiveTexture = nullptr;
+		vks::Texture* AOTexture = nullptr;
 
-		vkglTF::Texture* specularGlossinessTexture;
-		vkglTF::Texture* diffuseTexture;
+		vks::Texture* diffuseTexture = nullptr;
+		vks::Texture* specularGlossinessTexture = nullptr;
 
 		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 
 		Material(vks::VulkanDevice* device) : device(device) {};
-		void createDescriptorSet(VkDescriptorPool descriptorPool, VkDescriptorSetLayout descriptorSetLayout, uint32_t descriptorBindingFlags);
+		~Material() {
+			MaterialParametersBuffer.destroy();
+		};
+		void initMaterialTexture(vks::Texture* emptyTexture);
+		void allocateDescriptorSet(VkDescriptorPool descriptorPool, VkDescriptorSetLayout descriptorSetLayout, uint32_t descriptorBindingFlags);
+		void updateMaterialParametersBuffer();
+		void updateDescriptorSet();
+
+		void setBaseColorTexture(vks::Texture* texture) {
+			baseColorTexture = texture;
+			materialParameters.baseColorTextureEmpty = (texture == nullptr);
+		};
+
+		void setNormalTexture(vks::Texture* texture) {
+			normalTexture = texture;
+			materialParameters.normalTextureEmpty = (texture == nullptr);
+		};
+
+		void setMetallicRoughnessTexture(vks::Texture* texture) {
+			metallicRoughnessTexture = texture;
+			materialParameters.metallicRoughnessTextureEmpty = (texture == nullptr);
+		};
+
+		void setMetallicTexture(vks::Texture* texture) {
+			metallicTexture = texture;
+			materialParameters.metallicTextureEmpty = (texture == nullptr);
+		};
+
+		void setRoughnessTexture(vks::Texture* texture) {
+			roughnessTexture = texture;
+			materialParameters.roughnessTextureEmpty = (texture == nullptr);
+		};
+
+		void setOcclusionTexture(vks::Texture* texture) {
+			occlusionTexture = texture;
+			materialParameters.occlusionTextureEmpty = (texture == nullptr);
+		};
+
+		void setEmissiveTexture(vks::Texture* texture) {
+			emissiveTexture = texture;
+			materialParameters.emissiveTextureEmpty = (texture == nullptr);
+		};
+
+		void setAOTexture(vks::Texture* texture) {
+			AOTexture = texture;
+			materialParameters.AOTextureEmpty = (texture == nullptr);
+		};
+
+		void setDiffuseTexture(vks::Texture* texture) {
+			diffuseTexture = texture;
+			materialParameters.diffuseTextureEmpty = (texture == nullptr);
+		};
+
+		void setSpecularGlossinessTexture(vks::Texture* texture) {
+			specularGlossinessTexture = texture;
+			materialParameters.specularGlossinessTextureEmpty = (texture == nullptr);
+		};
 	};
 
 	/*
@@ -245,7 +340,7 @@ namespace vkglTF
 	};
 
 	enum RenderFlags {
-		BindImages = 0x00000001,
+		BindMaterial = 0x00000001,
 		RenderOpaqueNodes = 0x00000002,
 		RenderAlphaMaskedNodes = 0x00000004,
 		RenderAlphaBlendedNodes = 0x00000008
@@ -256,8 +351,8 @@ namespace vkglTF
 	*/
 	class Model {
 	private:
-		vkglTF::Texture* getTexture(uint32_t index);
-		vkglTF::Texture emptyTexture;
+		vks::Texture* getTexture(uint32_t index);
+		vks::Texture emptyTexture;
 		void createEmptyTexture(VkQueue transferQueue);
 	public:
 		vks::VulkanDevice* device;
@@ -279,7 +374,7 @@ namespace vkglTF
 
 		std::vector<Skin*> skins;
 
-		std::vector<Texture> textures;
+		std::vector<vks::Texture> textures;
 		std::vector<Material> materials;
 		std::vector<Animation> animations;
 
@@ -304,8 +399,8 @@ namespace vkglTF
 		void loadAnimations(tinygltf::Model& gltfModel);
 		void loadFromFile(std::string filename, vks::VulkanDevice* device, VkQueue transferQueue, uint32_t fileLoadingFlags = vkglTF::FileLoadingFlags::None, float scale = 1.0f);
 		void bindBuffers(VkCommandBuffer commandBuffer);
-		void drawNode(Node* node, VkCommandBuffer commandBuffer, uint32_t renderFlags = 0, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE, uint32_t bindImageSet = 1);
-		void draw(VkCommandBuffer commandBuffer, uint32_t renderFlags = 0, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE, uint32_t bindImageSet = 1);
+		void drawNode(Node* node, VkCommandBuffer commandBuffer, uint32_t renderFlags = 0, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE, uint32_t MaterialBindSet = 3);
+		void draw(VkCommandBuffer commandBuffer, uint32_t renderFlags = 0, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE, uint32_t MaterialBindSet = 3);
 		void getNodeDimensions(Node* node, glm::vec3& min, glm::vec3& max);
 		void getSceneDimensions();
 		void updateAnimation(uint32_t index, float time);
