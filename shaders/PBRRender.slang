@@ -134,10 +134,13 @@ float4 fragmentMain(VSOutput input)
 {
 	float3 N = calculateNormal(input);
 	float3 V = normalize(globalParams.camPos - input.WorldPos);
-	float3 R = reflect(-V, N);
-
-    float metallic = metallicTexture.Sample(input.UV).r * globalParams.globalMetallic;
-    float roughness = roughnessTexture.Sample(input.UV).r * globalParams.globalRoughness;
+    float3 R = reflect(-V, N);
+    float metallic = 1, roughness = 1;
+    float2 mr = materialParameters.mergeMetallicRoughnessTexture
+                    ? metallicRoughnessTexture.Sample(input.UV).rg
+                    : float2(metallicTexture.Sample(input.UV).r, roughnessTexture.Sample(input.UV).r);
+    metallic = mr.x * materialParameters.metallicFactor;
+    roughness = mr.y * materialParameters.roughnessFactor;
 
 	float3 F0 = float3(0.04, 0.04, 0.04);
 	F0 = lerp(F0, ALBEDO(input.UV), metallic);

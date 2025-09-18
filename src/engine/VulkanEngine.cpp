@@ -32,6 +32,8 @@ void VulkanEngine::loadAssets()
 	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.setMetallicTexture(&textures.metallicMap);
 	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.setRoughnessTexture(&textures.roughnessMap);
 	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.updateDescriptorSet();
+	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.materialParameters.metallicFactor = 1;
+	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.materialParameters.roughnessFactor = 1;
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.environmentCube.image, "environmentCube");
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.albedoMap.image, "albedoMap");
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.normalMap.image, "normalMap");
@@ -297,8 +299,6 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 			ImGui::InputFloat3("光源3", (float*)&lights.lightData.lights[3].position, "%.2f");
 			ImGui::InputFloat("曝光", &globalParam.exposure, 0.01f, 0.1f, "%.2f");
 			ImGui::InputFloat("Gamma", &globalParam.gamma, 0.01f, 0.1f, "%.2f");
-			ImGui::SliderFloat("粗糙度", &globalParam.globalRoughness, 0.01f, 1);
-			ImGui::SliderFloat("金属度", &globalParam.globalMetallic, 0.01f, 1);
 			ImGui::Checkbox("Skybox", &displaySkybox);
 		}
 		ImGui::Unindent();

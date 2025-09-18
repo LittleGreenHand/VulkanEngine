@@ -14,8 +14,6 @@ struct GlobalParams {
 	float3 camPos;
     float exposure;
     float gamma;
-    float globalRoughness;
-    float globalMetallic;
 };
 [[vk::binding(0, 0)]] ConstantBuffer<GlobalParams> globalParams;
 

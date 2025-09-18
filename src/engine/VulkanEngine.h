@@ -64,8 +64,6 @@ public:
 		glm::vec3 camPos;
 		float exposure = 4.5f;
 		float gamma = 2.2f;
-		float globalRoughness = 1.0f;
-		float globalMetallic = 1.0f;
 	} globalParam;
 
 	struct {
