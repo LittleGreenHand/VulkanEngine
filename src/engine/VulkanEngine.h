@@ -19,14 +19,6 @@
 #include "PipelineBuilder.h"
 #include "VulkanLights.h"
 
-//不同类型的描述符的set编号
-enum LayoutBindIndex {
-	LBI_GLOBAL = 0,
-	LBI_IBL,
-	LBI_LIGHTS,
-	LBI_MATERIALS,
-	LBI_COUNT
-};
 class VulkanEngine : public VulkanEngineBase
 {
 public:
@@ -51,6 +43,7 @@ public:
 		vkglTF::Model skybox;
 		vkglTF::Model cerberus;
 		vkglTF::Model sponza;
+		vkglTF::Model sphere;
 	} models;
 
 	struct UniformBuffers {
@@ -60,6 +53,7 @@ public:
 
 	struct GlobalParams {
 		glm::mat4 view;
+		glm::mat4 inverseView;
 		glm::mat4 projection;
 		glm::vec3 camPos;
 		float exposure = 4.5f;
@@ -77,6 +71,7 @@ public:
 	VkDescriptorSetLayout MaterialDescriptorSetLayout{ VK_NULL_HANDLE };
 	VkDescriptorSetLayout globalParamDescriptorSetLayout{ VK_NULL_HANDLE };
 	VkDescriptorSetLayout IBLDescriptorLayout{ VK_NULL_HANDLE };
+	VkDescriptorSetLayout meshDescriptorSetLayout{ VK_NULL_HANDLE };
 	VkDescriptorSet IBLDescriptorSet{ VK_NULL_HANDLE };
 	struct Descriptor {
 		VkDescriptorSet globalParamDescriptorSet{ VK_NULL_HANDLE };
@@ -90,11 +85,11 @@ public:
 	{
 		title = "VulkanEngine";
 		camera.type = Camera::CameraType::firstperson;
-		camera.movementSpeed = 4.0f;
+		camera.movementSpeed = 3.0f;
 		camera.setPerspective(60.0f, (float)width / (float)height, 0.1f, 256.0f);
 		camera.rotationSpeed = 0.25f;
-		camera.setRotation({ -7.75f, 150.25f, 0.0f });
-		camera.setPosition({ 0.7f, 0.1f, 1.7f });
+		camera.setRotation({ 0.0f, 180.0f, 0.0f });
+		camera.setPosition({ 0.f, 0.f, 5.f });
 	}
 
 	~VulkanEngine()
@@ -120,6 +115,7 @@ public:
 			vkDestroyDescriptorSetLayout(device, MaterialDescriptorSetLayout, nullptr);
 			vkDestroyDescriptorSetLayout(device, globalParamDescriptorSetLayout, nullptr);
 			vkDestroyDescriptorSetLayout(device, IBLDescriptorLayout, nullptr);
+			vkDestroyDescriptorSetLayout(device, meshDescriptorSetLayout, nullptr);
 			vkDestroyDescriptorSetLayout(device, emptyDescriptorLayout, nullptr);
 		}
 	}

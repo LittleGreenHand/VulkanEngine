@@ -1,5 +1,6 @@
 #include "VulkanEngine.h"
 #include "VulkanUtil.h"
+#include "types.hpp"
 void VulkanEngine::getEnabledFeatures()
 {
 	if (deviceFeatures.samplerAnisotropy) {
@@ -15,10 +16,8 @@ void VulkanEngine::getEnabledFeatures()
 void VulkanEngine::loadAssets()
 {
 	auto tStart = std::chrono::high_resolution_clock::now();
-	//加载GLTF数据时需要创建材质描述符，因此需要提前创建材质描述符集布局
-	vkglTF::createMaterialDescriptorSetLayout(vulkanDevice->logicalDevice, MaterialDescriptorSetLayout);
 
-	uint32_t glTFLoadingFlags = vkglTF::FileLoadingFlags::PreTransformVertices | vkglTF::FileLoadingFlags::PreMultiplyVertexColors | vkglTF::FileLoadingFlags::FlipY;
+	uint32_t glTFLoadingFlags = vkglTF::FileLoadingFlags::PreTransformVertices | vkglTF::FileLoadingFlags::PreMultiplyVertexColors;
 	models.cerberus.loadFromFile(getAssetPath() + "models/cerberus/cerberus.gltf", vulkanDevice, queue, glTFLoadingFlags);
 	textures.environmentCube.loadFromFile(getAssetPath() + "textures/hdr/gcanyon_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
 	textures.albedoMap.loadFromFile(getAssetPath() + "models/cerberus/albedo.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
@@ -40,8 +39,12 @@ void VulkanEngine::loadAssets()
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.aoMap.image, "aoMap");
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.metallicMap.image, "metallicMap");
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.roughnessMap.image, "roughnessMap");
+	models.cerberus.nodes[0]->rotation = vkUtils::eularToQuaternion(glm::vec3(90, 90, 0));
+	models.cerberus.nodes[0]->translation = (glm::vec3(-2, 0.5, 0));
+	models.cerberus.nodes[0]->update();
 		
 	models.skybox.loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, queue, glTFLoadingFlags);
+	models.sphere.loadFromFile(getAssetPath() + "models/sphere.gltf", vulkanDevice, queue, glTFLoadingFlags);
 	models.sponza.loadFromFile(getAssetPath() + "models/sponza/sponza.gltf", vulkanDevice, queue, glTFLoadingFlags);
 
 	auto tEnd = std::chrono::high_resolution_clock::now(); 
@@ -52,8 +55,9 @@ void VulkanEngine::loadAssets()
 
 void VulkanEngine::setupDescriptors()
 {
+	MaterialDescriptorSetLayout = vkglTF::MaterialDescriptorSetLayout;
+	meshDescriptorSetLayout = vkglTF::MeshDescriptorSetLayout;
 	lights.preperDescriptor(vulkanDevice);
-
 	// 创建DescriptorPool
 	{
 		std::vector<VkDescriptorPoolSize> poolSizes = {
@@ -130,8 +134,8 @@ void VulkanEngine::preparePipelines()
 		PipelineBuilder builder(device);
 		std::vector<VkDescriptorSetLayout> setLayouts;
 		setLayouts.resize(2);
-		setLayouts[LBI_GLOBAL] = globalParamDescriptorSetLayout;
-		setLayouts[LBI_IBL] = IBLDescriptorLayout;
+		setLayouts[vks::LBI_GLOBAL] = globalParamDescriptorSetLayout;
+		setLayouts[vks::LBI_IBL] = IBLDescriptorLayout;
 		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(setLayouts);
 		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines.skyboxPipelineLayout));
 
@@ -147,11 +151,12 @@ void VulkanEngine::preparePipelines()
 	{
 		PipelineBuilder builder(device);
 		std::vector<VkDescriptorSetLayout> setLayouts;
-		setLayouts.resize(LBI_COUNT);
-		setLayouts[LBI_GLOBAL] = globalParamDescriptorSetLayout;
-		setLayouts[LBI_IBL] = IBLDescriptorLayout;
-		setLayouts[LBI_LIGHTS] = lights.descriptorSetLayout;
-		setLayouts[LBI_MATERIALS] = vkglTF::MaterialDescriptorSetLayout;
+		setLayouts.resize(vks::LBI_COUNT);
+		setLayouts[vks::LBI_GLOBAL] = globalParamDescriptorSetLayout;
+		setLayouts[vks::LBI_IBL] = IBLDescriptorLayout;
+		setLayouts[vks::LBI_LIGHTS] = lights.descriptorSetLayout;
+		setLayouts[vks::LBI_MATERIALS] = vkglTF::MaterialDescriptorSetLayout;
+		setLayouts[vks::LBI_CUSTOM] = meshDescriptorSetLayout;
 		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(setLayouts);
 		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines.pbrPipelineLayout));
 
@@ -183,8 +188,10 @@ void VulkanEngine::updateUniformBuffers()
 {
 	// 3D object
 	globalParam.view = camera.matrices.view;
+	globalParam.inverseView = glm::inverse(camera.matrices.view);
 	globalParam.projection = camera.matrices.perspective;
-	globalParam.camPos = camera.position * -1.0f;
+	globalParam.camPos = camera.position * -1.0f;//转为Y向下的右手系
+	
 	memcpy(globalParamBuffers[currentBuffer].globalParamBuffer.mapped, &globalParam, sizeof(GlobalParams));
 }
 
@@ -233,9 +240,9 @@ void VulkanEngine::buildCommandBuffer()
 
 	const int descriptorSetCount = 3;
 	std::vector<VkDescriptorSet> descriptorSetsArray(descriptorSetCount);
-	descriptorSetsArray[LBI_GLOBAL] = frameDescriptorSets[currentBuffer].globalParamDescriptorSet;
-	descriptorSetsArray[LBI_IBL] = IBLDescriptorSet;
-	descriptorSetsArray[LBI_LIGHTS] = lights.descriptorSet;
+	descriptorSetsArray[vks::LBI_GLOBAL] = frameDescriptorSets[currentBuffer].globalParamDescriptorSet;
+	descriptorSetsArray[vks::LBI_IBL] = IBLDescriptorSet;
+	descriptorSetsArray[vks::LBI_LIGHTS] = lights.descriptorSet;
 	// Skybox
 	if (displaySkybox)
 	{
@@ -250,8 +257,10 @@ void VulkanEngine::buildCommandBuffer()
 	vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline PBR", { 1.0f, 1.0f, 1.0f });
 	vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbr);
 	vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbrPipelineLayout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
-	models.cerberus.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout, LBI_MATERIALS);
-	models.sponza.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout, LBI_MATERIALS);
+
+	models.cerberus.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout);
+	//models.sponza.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout);
+	//models.sphere.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout, LBI_MATERIALS);
 	vkUtils::cmdEndLabel(cmdBuffer);
 
 	// UI

@@ -1108,3 +1108,18 @@ void vkUtils::generatePrefilteredCube(vks::TextureCubeMap& prefilteredCube, vks:
 	auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
 	std::cout << "Generating pre-filtered enivornment cube with " << numMips << " mip levels took " << tDiff << " ms" << std::endl;
 }
+
+glm::quat vkUtils::eularToQuaternion(const glm::vec3& euler)
+{
+	// 将角度转换为弧度
+	glm::vec3 radians = glm::radians(euler);
+
+	// 计算各个轴的旋转四元数
+	glm::quat pitch = glm::angleAxis(radians.x, glm::vec3(1.0f, 0.0f, 0.0f));
+	glm::quat yaw = glm::angleAxis(radians.y, glm::vec3(0.0f, 1.0f, 0.0f));
+	glm::quat roll = glm::angleAxis(radians.z, glm::vec3(0.0f, 0.0f, 1.0f));
+
+	// 组合旋转：注意旋转顺序是xyz
+	// 因为GLM使用的是右乘，旋转顺序是从右到左应用
+	return roll * yaw * pitch;
+}

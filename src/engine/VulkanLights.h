@@ -8,7 +8,7 @@ struct LightInfo {
 	glm::vec4 color;
 };
 struct LightUbo {
-	LightInfo lights[16]{ {glm::vec4(-15, -15 * 0.5f, -15, 1.0f), glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)},
+	LightInfo lights[16]{ {glm::vec4(0, 0, 0, 1.0f), glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)},
 					 { glm::vec4(-15, -15 * 0.5f, 15, 1.0f), glm::vec4(1.0f, 1.0f, 1.0f, 1.0f) },
 					 { glm::vec4(15, -15 * 0.5f, 15, 1.0f), glm::vec4(1.0f, 1.0f, 1.0f, 1.0f) },
 					 { glm::vec4(15, -15 * 0.5f, -15, 1.0f), glm::vec4(1.0f, 1.0f, 1.0f, 1.0f) } };

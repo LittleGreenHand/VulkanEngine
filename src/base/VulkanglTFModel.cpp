@@ -17,10 +17,11 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define TINYGLTF_NO_STB_IMAGE_WRITE
 #include <array>
+#include "types.hpp"
 #include "VulkanglTFModel.h"
 
 VkDescriptorSetLayout vkglTF::MaterialDescriptorSetLayout = VK_NULL_HANDLE;
-VkDescriptorSetLayout vkglTF::descriptorSetLayoutUbo = VK_NULL_HANDLE;
+VkDescriptorSetLayout vkglTF::MeshDescriptorSetLayout = VK_NULL_HANDLE;
 VkMemoryPropertyFlags vkglTF::memoryPropertyFlags = 0;
 uint32_t vkglTF::descriptorBindingFlags = vkglTF::DescriptorBindingFlags::allTexture;
 
@@ -556,7 +557,7 @@ void vkglTF::Primitive::setDimensions(glm::vec3 min, glm::vec3 max) {
 */
 vkglTF::Mesh::Mesh(vks::VulkanDevice *device, glm::mat4 matrix) {
 	this->device = device;
-	this->uniformBlock.matrix = matrix;
+	this->uniformBlock.modelMatrix = matrix;
 	VK_CHECK_RESULT(device->createBuffer(
 		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -581,10 +582,10 @@ vkglTF::Mesh::~Mesh() {
 	glTF node
 */
 glm::mat4 vkglTF::Node::localMatrix() {
-	return glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
+	return glm::translate(glm::mat4(1.0f), -translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
 }
 
-glm::mat4 vkglTF::Node::getMatrix() {
+glm::mat4 vkglTF::Node::getWorldMatrix() {
 	glm::mat4 m = localMatrix();
 	vkglTF::Node *p = parent;
 	while (p) {
@@ -596,14 +597,14 @@ glm::mat4 vkglTF::Node::getMatrix() {
 
 void vkglTF::Node::update() {
 	if (mesh) {
-		glm::mat4 m = getMatrix();
+		glm::mat4 m = getWorldMatrix();
+		mesh->uniformBlock.modelMatrix = m;
 		if (skin) {
-			mesh->uniformBlock.matrix = m;
 			// Update join matrices
 			glm::mat4 inverseTransform = glm::inverse(m);
 			for (size_t i = 0; i < skin->joints.size(); i++) {
 				vkglTF::Node *jointNode = skin->joints[i];
-				glm::mat4 jointMat = jointNode->getMatrix() * skin->inverseBindMatrices[i];
+				glm::mat4 jointMat = jointNode->getWorldMatrix() * skin->inverseBindMatrices[i];
 				jointMat = inverseTransform * jointMat;
 				mesh->uniformBlock.jointMatrix[i] = jointMat;
 			}
@@ -813,10 +814,6 @@ vkglTF::Model::~Model()
     for (auto& skin : skins) {
         delete skin;
     }
-	if (descriptorSetLayoutUbo != VK_NULL_HANDLE) {
-		vkDestroyDescriptorSetLayout(device->logicalDevice, descriptorSetLayoutUbo, nullptr);
-		descriptorSetLayoutUbo = VK_NULL_HANDLE;
-	}
 	vkDestroyDescriptorPool(device->logicalDevice, descriptorPool, nullptr);
 	emptyTexture.destroy();
 }
@@ -1331,7 +1328,7 @@ void vkglTF::Model::loadFromFile(std::string filename, vks::VulkanDevice *device
 		const bool flipY = fileLoadingFlags & FileLoadingFlags::FlipY;
 		for (Node* node : linearNodes) {
 			if (node->mesh) {
-				const glm::mat4 localMatrix = node->getMatrix();
+				const glm::mat4 localMatrix = node->getWorldMatrix();
 				for (Primitive* primitive : node->mesh->primitives) {
 					for (uint32_t i = 0; i < primitive->vertexCount; i++) {
 						Vertex& vertex = vertexBuffer[primitive->firstVertex + i];
@@ -1466,24 +1463,20 @@ void vkglTF::Model::loadFromFile(std::string filename, vks::VulkanDevice *device
 	// Descriptors for per-node uniform buffers
 	{
 		// Layout is global, so only create if it hasn't already been created before
-		if (descriptorSetLayoutUbo == VK_NULL_HANDLE) {
-			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-				vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 0),
-			};
-			VkDescriptorSetLayoutCreateInfo descriptorLayoutCI{};
-			descriptorLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-			descriptorLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
-			descriptorLayoutCI.pBindings = setLayoutBindings.data();
-			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device->logicalDevice, &descriptorLayoutCI, nullptr, &descriptorSetLayoutUbo));
+		if (MeshDescriptorSetLayout == VK_NULL_HANDLE) {
+			createMeshDescriptorSetLayout(device->logicalDevice);
 		}
 		for (auto node : nodes) {
-			prepareNodeDescriptor(node, descriptorSetLayoutUbo);
+			prepareNodeDescriptor(node, MeshDescriptorSetLayout);
 		}
 	}
 
 	// Descriptors for per-material images
 	//if (imageCount > 0)
 	{
+		if (MaterialDescriptorSetLayout == VK_NULL_HANDLE) {
+			createMaterialDescriptorSetLayout(device->logicalDevice);
+		}
 		for (auto& material : materials) {
 			VK_CHECK_RESULT(device->createBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &material.MaterialParametersBuffer, sizeof(Material::materialParameters)));
 			VK_CHECK_RESULT(material.MaterialParametersBuffer.map());
@@ -1502,9 +1495,12 @@ void vkglTF::Model::bindBuffers(VkCommandBuffer commandBuffer)
 	buffersBound = true;
 }
 
-void vkglTF::Model::drawNode(Node *node, VkCommandBuffer commandBuffer, uint32_t renderFlags, VkPipelineLayout pipelineLayout, uint32_t MaterialBindSet)
+void vkglTF::Model::drawNode(Node *node, VkCommandBuffer commandBuffer, uint32_t renderFlags, VkPipelineLayout pipelineLayout)
 {
 	if (node->mesh) {
+		//node->mesh->updateUniformBuffer();
+		if (pipelineLayout != VK_NULL_HANDLE)
+			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, vks::LBI_CUSTOM, 1, &node->mesh->uniformBuffer.descriptorSet, 0, nullptr);
 		for (Primitive* primitive : node->mesh->primitives) {
 			bool skip = false;
 			vkglTF::Material& material = primitive->material;
@@ -1520,18 +1516,18 @@ void vkglTF::Model::drawNode(Node *node, VkCommandBuffer commandBuffer, uint32_t
 			}
 			if (!skip) {
 				if (renderFlags & RenderFlags::BindMaterial) {
-					vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, MaterialBindSet, 1, &material.descriptorSet, 0, nullptr);
+					vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, vks::LBI_MATERIALS, 1, &material.descriptorSet, 0, nullptr);
 				}
 				vkCmdDrawIndexed(commandBuffer, primitive->indexCount, 1, primitive->firstIndex, 0, 0);
 			}
 		}
 	}
 	for (auto& child : node->children) {
-		drawNode(child, commandBuffer, renderFlags, pipelineLayout, MaterialBindSet);
+		drawNode(child, commandBuffer, renderFlags, pipelineLayout);
 	}
 }
 
-void vkglTF::Model::draw(VkCommandBuffer commandBuffer, uint32_t renderFlags, VkPipelineLayout pipelineLayout, uint32_t MaterialBindSet)
+void vkglTF::Model::draw(VkCommandBuffer commandBuffer, uint32_t renderFlags, VkPipelineLayout pipelineLayout)
 {
 	if (!buffersBound) {
 		const VkDeviceSize offsets[1] = {0};
@@ -1539,7 +1535,7 @@ void vkglTF::Model::draw(VkCommandBuffer commandBuffer, uint32_t renderFlags, Vk
 		vkCmdBindIndexBuffer(commandBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 	}
 	for (auto& node : nodes) {
-		drawNode(node, commandBuffer, renderFlags, pipelineLayout, MaterialBindSet);
+		drawNode(node, commandBuffer, renderFlags, pipelineLayout);
 	}
 }
 
@@ -1547,8 +1543,8 @@ void vkglTF::Model::getNodeDimensions(Node *node, glm::vec3 &min, glm::vec3 &max
 {
 	if (node->mesh) {
 		for (Primitive *primitive : node->mesh->primitives) {
-			glm::vec4 locMin = glm::vec4(primitive->dimensions.min, 1.0f) * node->getMatrix();
-			glm::vec4 locMax = glm::vec4(primitive->dimensions.max, 1.0f) * node->getMatrix();
+			glm::vec4 locMin = glm::vec4(primitive->dimensions.min, 1.0f) * node->getWorldMatrix();
+			glm::vec4 locMax = glm::vec4(primitive->dimensions.max, 1.0f) * node->getWorldMatrix();
 			if (locMin.x < min.x) { min.x = locMin.x; }
 			if (locMin.y < min.y) { min.y = locMin.y; }
 			if (locMin.z < min.z) { min.z = locMin.z; }

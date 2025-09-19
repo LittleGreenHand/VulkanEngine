@@ -21,7 +21,7 @@ public:
     PipelineBuilder& setRasterizationState(
         VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL,
         VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT,
-        VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        VkFrontFace frontFace = VK_FRONT_FACE_CLOCKWISE,
         VkPipelineRasterizationStateCreateFlags flags = 0);
 
     // 设置颜色混合附件状态

@@ -1,6 +1,7 @@
 import "Binding_Global.slang";
 import "Binding_Light.slang";
 import "Binding_Material.slang";
+import "Binding_Mesh.slang";
 
 struct VSOutput
 {
@@ -11,13 +12,10 @@ struct VSOutput
     float3 Tangent;
 };
 
-struct UBO{
-	float4x4 model;
-};
-//ConstantBuffer<UBO> ubo;
-
 #define PI 3.1415926535897932384626433832795
 #define ALBEDO(uv) pow(baseColorTexture.Sample(uv).rgb, float3(2.2, 2.2, 2.2))
+//#define ALBEDO(uv) pow(materialParameters.baseColorTextureEmpty ? float3(1.0, 0, 0) : baseColorTexture.Sample(uv).rgb, float3(2.2, 2.2, 2.2))
+
 
 // From http://filmicgames.com/archives/75
 float3 Uncharted2Tonemap(float3 x)
@@ -114,16 +112,11 @@ float3 calculateNormal(VSOutput input)
 [shader("vertex")]
 VSOutput vertexMain(VSInput input)
 {
-    UBO ubo;
-    ubo.model = float4x4(1.0, 0.0, 0.0, 0.0,
-                         0.0, 1.0, 0.0, 0.0,
-                         0.0, 0.0, 1.0, 0.0,
-                         0.0, 0.0, 0.0, 1.0);
-	VSOutput output;
-	float3 locPos = mul(ubo.model, float4(input.Pos, 1.0)).xyz;
-	output.WorldPos = locPos;
-	output.Normal = mul((float3x3)ubo.model, input.Normal);
-	output.Tangent = mul((float3x3)ubo.model, input.Tangent.xyz);
+    VSOutput output;
+    float3 locPos = mul(meshInfo.model, float4(input.Pos, 1.0)).xyz;
+    output.WorldPos = locPos;
+    output.Normal = mul((float3x3)meshInfo.model, input.Normal);
+    output.Tangent = mul((float3x3)meshInfo.model, input.Tangent.xyz);
 	output.UV = input.UV;
 	output.Pos = mul(globalParams.projection, mul(globalParams.view, float4(output.WorldPos, 1.0)));
 	return output;

@@ -42,4 +42,6 @@ public:
 	static void generateIrradianceCube(vks::TextureCubeMap& irradianceCube, vks::TextureCubeMap& environmentCube);
 	static void generatePrefilteredCube(vks::TextureCubeMap& prefilteredCube, vks::TextureCubeMap& environmentCube);
 
+public:
+	static glm::quat eularToQuaternion(const glm::vec3& euler);
 };

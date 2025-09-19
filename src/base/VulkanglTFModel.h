@@ -46,7 +46,7 @@
 namespace vkglTF
 {
 	extern VkDescriptorSetLayout MaterialDescriptorSetLayout;
-	extern VkDescriptorSetLayout descriptorSetLayoutUbo;
+	extern VkDescriptorSetLayout MeshDescriptorSetLayout;
 	extern VkMemoryPropertyFlags memoryPropertyFlags;
 	extern uint32_t descriptorBindingFlags;
 
@@ -80,7 +80,7 @@ namespace vkglTF
 
 	//static VkDescriptorSetLayout MaterialDescriptorSetLayout = VK_NULL_HANDLE;
 	const uint32_t imageDescriptorBindingCount = 10;
-	static void createMaterialDescriptorSetLayout(VkDevice device, VkDescriptorSetLayout& materialDescriptorSetLayout) {
+	static void createMaterialDescriptorSetLayout(VkDevice device) {
 		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings{};
 		//这个缓冲区用于存储材质参数
 		setLayoutBindings.push_back(vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 0));
@@ -94,7 +94,16 @@ namespace vkglTF
 		descriptorLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
 		descriptorLayoutCI.pBindings = setLayoutBindings.data();
 		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &MaterialDescriptorSetLayout));
-		materialDescriptorSetLayout = MaterialDescriptorSetLayout;
+	}
+	static void createMeshDescriptorSetLayout(VkDevice device) {
+		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings{};
+		setLayoutBindings.push_back(vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0));
+
+		VkDescriptorSetLayoutCreateInfo descriptorLayoutCI{};
+		descriptorLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		descriptorLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
+		descriptorLayoutCI.pBindings = setLayoutBindings.data();
+		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &MeshDescriptorSetLayout));
 	}
 
 	/*
@@ -237,13 +246,20 @@ namespace vkglTF
 		} uniformBuffer;
 
 		struct UniformBlock {
-			glm::mat4 matrix;
+			glm::mat4 modelMatrix;
 			glm::mat4 jointMatrix[64]{};
 			float jointcount{ 0 };
 		} uniformBlock;
 
 		Mesh(vks::VulkanDevice* device, glm::mat4 matrix);
 		~Mesh();
+		void updateUniformBuffer()
+		{
+			uniformBlock.modelMatrix[3][0] *= -1;
+			uniformBlock.modelMatrix[3][1] *= -1;
+			uniformBlock.modelMatrix[3][2] *= -1;
+			memcpy(uniformBuffer.mapped, &uniformBlock, sizeof(uniformBlock));
+		}
 	};
 
 	/*
@@ -272,7 +288,7 @@ namespace vkglTF
 		glm::vec3 scale{ 1.0f };
 		glm::quat rotation{};
 		glm::mat4 localMatrix();
-		glm::mat4 getMatrix();
+		glm::mat4 getWorldMatrix();
 		void update();
 		~Node();
 	};
@@ -399,8 +415,8 @@ namespace vkglTF
 		void loadAnimations(tinygltf::Model& gltfModel);
 		void loadFromFile(std::string filename, vks::VulkanDevice* device, VkQueue transferQueue, uint32_t fileLoadingFlags = vkglTF::FileLoadingFlags::None, float scale = 1.0f);
 		void bindBuffers(VkCommandBuffer commandBuffer);
-		void drawNode(Node* node, VkCommandBuffer commandBuffer, uint32_t renderFlags = 0, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE, uint32_t MaterialBindSet = 3);
-		void draw(VkCommandBuffer commandBuffer, uint32_t renderFlags = 0, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE, uint32_t MaterialBindSet = 3);
+		void drawNode(Node* node, VkCommandBuffer commandBuffer, uint32_t renderFlags = 0, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE);
+		void draw(VkCommandBuffer commandBuffer, uint32_t renderFlags = 0, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE);
 		void getNodeDimensions(Node* node, glm::vec3& min, glm::vec3& max);
 		void getSceneDimensions();
 		void updateAnimation(uint32_t index, float time);
