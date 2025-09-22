@@ -14,6 +14,7 @@ struct LightUbo {
 					 { glm::vec4(15, -15 * 0.5f, -15, 1.0f), glm::vec4(1.0f, 1.0f, 1.0f, 1.0f) } };
 	uint32_t activeLightCount = 4;
 };
+
 class VulkanLights
 {
 public:

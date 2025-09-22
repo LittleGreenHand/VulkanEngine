@@ -276,17 +276,18 @@ namespace vkglTF
 		glTF node
 	*/
 	struct Node {
-		Node* parent;
-		uint32_t index;
+		Node* parent = nullptr;
+		uint32_t index = 0;
 		std::vector<Node*> children;
-		glm::mat4 matrix;
+		glm::mat4 matrix = glm::mat4(1.0f);
 		std::string name;
-		Mesh* mesh;
-		Skin* skin;
+		bool visible = true;
+		Mesh* mesh = nullptr;
+		Skin* skin = nullptr;
 		int32_t skinIndex = -1;
-		glm::vec3 translation{};
+		glm::vec3 translation{0, 0, 0};
 		glm::vec3 scale{ 1.0f };
-		glm::quat rotation{};
+		glm::quat rotation{0, 0, 0, 1};
 		glm::mat4 localMatrix();
 		glm::mat4 getWorldMatrix();
 		void update();

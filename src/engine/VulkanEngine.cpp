@@ -259,8 +259,8 @@ void VulkanEngine::buildCommandBuffer()
 	vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbrPipelineLayout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
 
 	models.cerberus.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout);
-	//models.sponza.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout);
-	//models.sphere.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout, LBI_MATERIALS);
+	models.sponza.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout);
+	models.sphere.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout);
 	vkUtils::cmdEndLabel(cmdBuffer);
 
 	// UI
@@ -311,6 +311,40 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 			ImGui::Checkbox("Skybox", &displaySkybox);
 		}
 		ImGui::Unindent();
+	}
+}
+
+void VulkanEngine::drawNodeTree()
+{
+	int nodeId = 0;
+	{
+		// 创建左右分栏布局
+		ImGui::Begin("场景树",0, ImGuiWindowFlags_AlwaysAutoResize);
+
+		// 左侧节点树
+		ImGui::BeginChild("节点树", ImVec2(400, 800), true);
+		for (vkglTF::Node* node : models.cerberus.nodes)
+		{
+			vkUtils::DrawNodeTree(node, nodeId);
+		}
+		for (vkglTF::Node* node : models.sponza.nodes)
+		{
+			vkUtils::DrawNodeTree(node, nodeId);
+		}
+		for (vkglTF::Node* node : models.sphere.nodes)
+		{
+			vkUtils::DrawNodeTree(node, nodeId);
+		}
+		ImGui::EndChild();
+
+		ImGui::SameLine(0, 4);
+
+		// 右侧属性面板
+		ImGui::BeginChild("节点属性", ImVec2(550, 800), true);
+		vkUtils::DrawNodePropertiesPanel();
+		ImGui::EndChild();
+
+		ImGui::End();
 	}
 }
 void VulkanEngine::OnHandleMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)

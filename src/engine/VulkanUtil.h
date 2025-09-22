@@ -43,5 +43,13 @@ public:
 	static void generatePrefilteredCube(vks::TextureCubeMap& prefilteredCube, vks::TextureCubeMap& environmentCube);
 
 public:
+	//数学相关
 	static glm::quat eularToQuaternion(const glm::vec3& euler);
+
+public:
+	//UI相关
+	static vkglTF::Node* selectedNode;
+	static void DrawNodeTree(vkglTF::Node* node, int &nodeId);
+	static void DrawNodePropertiesPanel();
+
 };

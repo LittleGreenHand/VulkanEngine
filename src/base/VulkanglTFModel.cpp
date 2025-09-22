@@ -1296,9 +1296,12 @@ void vkglTF::Model::loadFromFile(std::string filename, vks::VulkanDevice *device
 		}
 		loadMaterials(gltfModel);
 		const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene > -1 ? gltfModel.defaultScene : 0];
+		vkglTF::Node* rootNode = new Node{};
+		rootNode->name = filename;
+		nodes.push_back(rootNode);
 		for (size_t i = 0; i < scene.nodes.size(); i++) {
 			const tinygltf::Node node = gltfModel.nodes[scene.nodes[i]];
-			loadNode(nullptr, node, scene.nodes[i], gltfModel, indexBuffer, vertexBuffer, scale);
+			loadNode(rootNode, node, scene.nodes[i] + 1, gltfModel, indexBuffer, vertexBuffer, scale);
 		}
 		if (gltfModel.animations.size() > 0) {
 			loadAnimations(gltfModel);
@@ -1497,6 +1500,8 @@ void vkglTF::Model::bindBuffers(VkCommandBuffer commandBuffer)
 
 void vkglTF::Model::drawNode(Node *node, VkCommandBuffer commandBuffer, uint32_t renderFlags, VkPipelineLayout pipelineLayout)
 {
+	if (!node->visible)
+		return;
 	if (node->mesh) {
 		//node->mesh->updateUniformBuffer();
 		if (pipelineLayout != VK_NULL_HANDLE)

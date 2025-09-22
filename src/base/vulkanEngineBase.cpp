@@ -646,7 +646,7 @@ void VulkanEngineBase::updateOverlay()
 	//ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
 	//ImGui::SetNextWindowPos(ImVec2(10 * ui.scale, 10 * ui.scale));
 	//ImGui::SetNextWindowSize(ImVec2(0, 0), ImGuiSetCond_FirstUseEver);
-	ImGui::Begin("Vulkan Engine", nullptr, 0);
+	ImGui::Begin("全局设置", nullptr, 0);
 	//ImGui::TextUnformatted(title.c_str());
 	//ImGui::TextUnformatted(deviceProperties.deviceName);
 	ImGui::Text("%.2f ms/frame (%.1d fps)", (1000.0f / lastFPS), lastFPS);
@@ -666,6 +666,7 @@ void VulkanEngineBase::updateOverlay()
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
 	ImGui::PopStyleVar();
 #endif
+	drawNodeTree();
 	ImGui::Render();
 
 	uiOverlay.update(currentBuffer);
@@ -3235,6 +3236,7 @@ void VulkanEngineBase::createSwapChain()
 }
 
 void VulkanEngineBase::OnUpdateUIOverlay(vks::UIOverlay *overlay) {}
+void VulkanEngineBase::drawNodeTree() {}
 
 #if defined(_WIN32)
 void VulkanEngineBase::OnHandleMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {};

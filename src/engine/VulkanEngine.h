@@ -130,6 +130,7 @@ public:
 	void prepare() override;
 	virtual void render() override;
 	virtual void OnUpdateUIOverlay(vks::UIOverlay* overlay) override;
+	virtual void drawNodeTree() override;
 	virtual void OnHandleMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) override;
 };
 

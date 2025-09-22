@@ -1123,3 +1123,166 @@ glm::quat vkUtils::eularToQuaternion(const glm::vec3& euler)
 	// 因为GLM使用的是右乘，旋转顺序是从右到左应用
 	return roll * yaw * pitch;
 }
+
+// 在类中添加静态变量跟踪选中的节点
+vkglTF::Node* vkUtils::selectedNode = nullptr;
+
+void vkUtils::DrawNodeTree(vkglTF::Node* node, int& nodeId)
+{
+	if (!node) return;
+
+	// 保存当前节点ID
+	int originalNodeId = nodeId;
+	std::string baseId = std::to_string(originalNodeId);
+
+	// 处理节点名称
+	std::string displayName = node->name.empty() ? "Unnamed Node" : node->name;
+	displayName += "##node_" + baseId;
+
+	// 节点是否可展开
+	bool isExpandable = !node->children.empty();
+	ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow;
+
+	// 选中节点高亮显示
+	if (selectedNode == node)
+	{
+		flags |= ImGuiTreeNodeFlags_Selected;
+	}
+	if (!isExpandable)
+	{
+		flags |= ImGuiTreeNodeFlags_Leaf;
+	}
+
+	// 绘制可见性复选框
+	ImGui::Checkbox(("##vis_" + baseId).c_str(), &node->visible);
+	ImGui::SameLine(0, 4);
+
+	// 绘制节点树
+	bool isOpen = ImGui::TreeNodeEx(displayName.c_str(), flags);
+	if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) 
+	{
+		if(selectedNode == node)
+			selectedNode = nullptr; // 再次单击已选中节点，取消选择
+		else
+			selectedNode = node; // 单击节点文本区域，选中当前节点
+	}
+
+	// 递增节点ID
+	nodeId++;
+
+	// 递归绘制子节点
+	if (isOpen && isExpandable)
+	{
+		for (vkglTF::Node* child : node->children)
+		{
+			DrawNodeTree(child, nodeId);
+		}
+		ImGui::TreePop();
+	}
+	else if (!isExpandable)
+	{
+		ImGui::TreePop();
+	}
+}
+
+// 新增函数：绘制属性编辑面板
+void vkUtils::DrawNodePropertiesPanel()
+{
+	if (!selectedNode)
+	{
+		ImGui::Text("Select a node to edit properties");
+		return;
+	}
+
+	// 属性面板标题
+	ImGui::Text("Node: %s",
+		selectedNode->name.empty() ? "Unnamed Node" : selectedNode->name.c_str());
+	ImGui::Separator();
+
+	// 节点名称编辑
+	char nameBuffer[256];
+	strncpy(nameBuffer, selectedNode->name.c_str(), sizeof(nameBuffer) - 1);
+	nameBuffer[sizeof(nameBuffer) - 1] = '\0';
+	if (ImGui::InputText("Name", nameBuffer, sizeof(nameBuffer)))
+	{
+		selectedNode->name = nameBuffer;
+	}
+
+	// 可见性控制
+	ImGui::Checkbox("Visible", &selectedNode->visible);
+
+	// 平移
+	ImGui::InputFloat3("Translation", &selectedNode->translation.x);
+
+	// 旋转 (欧拉角)
+	glm::vec3 rotationEuler = glm::eulerAngles(selectedNode->rotation) * (180.0f / glm::pi<float>());
+	if (ImGui::InputFloat3("Rotation (deg)", &rotationEuler.x))
+	{
+		selectedNode->rotation = glm::quat(glm::radians(rotationEuler));
+	}
+
+	// 缩放
+	ImGui::InputFloat3("Scale", &selectedNode->scale.x);
+	ImGui::Separator();
+	ImGui::Separator();
+	ImGui::Separator();
+
+	// 材质属性（如果有网格）
+	if (selectedNode->mesh)
+	{
+		ImGui::Text(" ");
+		ImGui::Text(" ");
+		ImGui::Text("Material Properties");
+		ImGui::Separator();
+		ImGui::Text("Mesh: %s", selectedNode->mesh->name.c_str());
+
+		for (size_t i = 0; i < selectedNode->mesh->primitives.size(); ++i)
+		{
+			auto& primitive = selectedNode->mesh->primitives[i];
+			auto& material = primitive->material;
+
+			ImGui::PushID(i);
+			ImGui::Text("Primitive %d Material", (int)i);
+			ImGui::Separator();
+
+			ImGui::ColorEdit4("Base Color Factor", &material.materialParameters.baseColorFactor.x);
+			ImGui::SliderFloat("Metallic Factor", &material.materialParameters.metallicFactor, 0.0f, 1.0f);
+			ImGui::SliderFloat("Roughness Factor", &material.materialParameters.roughnessFactor, 0.0f, 1.0f);
+			ImGui::SliderFloat("Alpha Cutoff", &material.materialParameters.alphaCutoff, 0.0f, 1.0f);
+
+			const char* alphaModes[] = { "Opaque", "Mask", "Blend" };
+			ImGui::Combo("Alpha Mode", (int*)&material.alphaMode, alphaModes, IM_ARRAYSIZE(alphaModes));
+			// 定义纹理参数与对应显示文本的映射关系
+			std::vector<std::pair<bool, const char*>> textureInfo = {
+				{!material.materialParameters.baseColorTextureEmpty, "Base Color Texture: Present"},
+				{!material.materialParameters.normalTextureEmpty, "Normal Texture: Present"},
+				{!material.materialParameters.metallicRoughnessTextureEmpty, "Metallic-Roughness Texture: Present"},
+				{!material.materialParameters.metallicTextureEmpty, "Metallic Texture: Present"},
+				{!material.materialParameters.roughnessTextureEmpty, "Roughness Texture: Present"},
+				{!material.materialParameters.occlusionTextureEmpty, "Occlusion Texture: Present"},
+				{!material.materialParameters.emissiveTextureEmpty, "Emissive Texture: Present"},
+				{!material.materialParameters.AOTextureEmpty, "AO Texture: Present"},
+				{!material.materialParameters.diffuseTextureEmpty, "Diffuse Texture: Present"},
+				{!material.materialParameters.specularGlossinessTextureEmpty, "Specular-Glossiness Texture: Present"}
+			};
+
+			// 循环显示存在的纹理信息
+			for (const auto& [isPresent, text] : textureInfo) {
+				if (isPresent) {
+					ImGui::Text("%s", text);
+				}
+			}
+
+			ImGui::Separator();
+			ImGui::Separator();
+			ImGui::Text(" ");
+			ImGui::PopID();
+		}
+	}
+	selectedNode->update();
+	// 取消选择按钮
+	if (ImGui::Button("Deselect"))
+	{
+		selectedNode = nullptr;
+	}
+}
