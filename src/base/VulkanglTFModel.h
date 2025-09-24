@@ -255,9 +255,9 @@ namespace vkglTF
 		~Mesh();
 		void updateUniformBuffer()
 		{
-			uniformBlock.modelMatrix[3][0] *= -1;
-			uniformBlock.modelMatrix[3][1] *= -1;
-			uniformBlock.modelMatrix[3][2] *= -1;
+			//uniformBlock.modelMatrix[3][0] *= -1;
+			//uniformBlock.modelMatrix[3][1] *= -1;
+			//uniformBlock.modelMatrix[3][2] *= -1;
 			memcpy(uniformBuffer.mapped, &uniformBlock, sizeof(uniformBlock));
 		}
 	};
@@ -287,10 +287,12 @@ namespace vkglTF
 		int32_t skinIndex = -1;
 		glm::vec3 translation{0, 0, 0};
 		glm::vec3 scale{ 1.0f };
-		glm::quat rotation{0, 0, 0, 1};
+		glm::quat rotation = glm::quat(0, 0, 0, 1);
 		glm::mat4 localMatrix();
 		glm::mat4 getWorldMatrix();
 		void update();
+		//将节点和子节点的变换重置为默认值
+		void clearTransform();
 		~Node();
 	};
 

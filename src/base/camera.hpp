@@ -1,11 +1,3 @@
-/*
-* Basic camera class providing a look-at and first-person camera
-*
-* Copyright (C) 2016-2024 by Sascha Willems - www.saschawillems.de
-*
-* This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
-*/
-
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
@@ -28,6 +20,8 @@ private:
 		rotM = glm::rotate(rotM, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
 
 		glm::vec3 translation = position;
+		translation.x *= -1.0f;
+		translation.z *= -1.0f;
 		if (flipY) {
 			translation.y *= -1.0f;
 		}
@@ -42,7 +36,7 @@ private:
 			matrices.view = transM * rotM;
 		}
 
-		viewPos = glm::vec4(position, 0.0f) * glm::vec4(-1.0f, 1.0f, -1.0f, 1.0f);
+		viewPos = glm::vec4(translation, 1.0f)/* * glm::vec4(-1.0f, 1.0f, -1.0f, 1.0f)*/;
 
 		if (matrices.view != currentMatrix) {
 			updated = true;
@@ -65,7 +59,7 @@ public:
 	float movementSpeed = 1.0f;
 
 	bool updated = true;
-	bool flipY = false;
+	bool flipY = true;
 
 	struct
 	{
@@ -170,22 +164,22 @@ public:
 		{
 			if (moving())
 			{
-				camFront.x = -cos(glm::radians(rotation.x)) * sin(glm::radians(rotation.y));
-				camFront.y = sin(glm::radians(rotation.x));
-				camFront.z = cos(glm::radians(rotation.x)) * cos(glm::radians(rotation.y));
+				camFront.x = -cos(glm::radians(rotation.x * (flipY ? -1.0f : 1.0f))) * sin(glm::radians(rotation.y));
+				camFront.y = sin(glm::radians(rotation.x * (flipY ? -1.0f : 1.0f)));
+				camFront.z = cos(glm::radians(rotation.x * (flipY ? -1.0f : 1.0f))) * cos(glm::radians(rotation.y));
 				camFront = glm::normalize(camFront);
 				camRight = glm::normalize(glm::cross(camFront, glm::vec3(0.0f, 1.0f, 0.0f)));
 				camUp = glm::normalize(glm::cross(camFront, camRight));
 
 				float moveSpeed = deltaTime * movementSpeed;
 				if (keys.up)
-					position += camFront * moveSpeed;
-				if (keys.down)
 					position -= camFront * moveSpeed;
+				if (keys.down)
+					position += camFront * moveSpeed;
 				if (keys.left)
-					position -= camRight * moveSpeed;
-				if (keys.right)
 					position += camRight * moveSpeed;
+				if (keys.right)
+					position -= camRight * moveSpeed;
 				if (keys.top)
 					position -= camUp * moveSpeed;
 				if (keys.bottom)

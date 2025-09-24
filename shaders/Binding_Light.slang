@@ -1,4 +1,3 @@
-//灯光
 struct LightInfo {
     float4 position;
     float4 color;

@@ -688,9 +688,10 @@ namespace vks
 	* @param copyQueue Queue used for the texture staging copy commands (must support transfer)
 	* @param (Optional) imageUsageFlags Usage flags for the texture's image (defaults to VK_IMAGE_USAGE_SAMPLED_BIT)
 	* @param (Optional) imageLayout Usage layout for the texture (defaults VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+	* @param (Optional) flipImage 是否需要上下翻转图像
 	*
 	*/
-	void TextureCubeMap::loadFromFile(std::string filename, VkFormat format, vks::VulkanDevice *device, VkQueue copyQueue, VkImageUsageFlags imageUsageFlags, VkImageLayout imageLayout)
+	void TextureCubeMap::loadFromFile(std::string filename, VkFormat format, vks::VulkanDevice *device, VkQueue copyQueue, VkImageUsageFlags imageUsageFlags, VkImageLayout imageLayout, bool flipImage)
 	{
 		ktxTexture* ktxTexture;
 		ktxResult result = loadKTXFile(filename, &ktxTexture);
@@ -703,6 +704,61 @@ namespace vks
 
 		ktx_uint8_t *ktxTextureData = ktxTexture_GetData(ktxTexture);
 		ktx_size_t ktxTextureSize = ktxTexture_GetSize(ktxTexture);
+		ktx_uint32_t elementSize = ktxTexture_GetElementSize(ktxTexture);
+
+		if (flipImage)
+		{
+			// 对每个面和每个mip级别进行翻转
+			for (uint32_t face = 0; face < 6; face++)
+			{
+				for (uint32_t level = 0; level < mipLevels; level++)
+				{
+					ktx_size_t offset;
+					KTX_error_code result = ktxTexture_GetImageOffset(ktxTexture, level, 0, face, &offset);
+					assert(result == KTX_SUCCESS);
+
+					uint32_t levelWidth = ktxTexture->baseWidth >> level;
+					uint32_t levelHeight = ktxTexture->baseHeight >> level;
+					uint32_t rowSize = levelWidth * elementSize;
+					uint8_t* imageData = ktxTextureData + offset;
+
+					for (uint32_t y = 0; y < levelHeight / 2; ++y) {
+						uint8_t* topRow = imageData + y * rowSize;
+						uint8_t* bottomRow = imageData + (levelHeight - 1 - y) * rowSize;
+						std::swap_ranges(topRow, topRow + rowSize, bottomRow);
+					}
+				}
+			}
+			// 交换+Y面(face=2)和-Y面(face=3)的数据
+			for (uint32_t level = 0; level < mipLevels; level++)
+			{
+				// 获取+Y面和-Y面的偏移量
+				ktx_size_t yPlusOffset, yMinusOffset;
+				KTX_error_code result = ktxTexture_GetImageOffset(ktxTexture, level, 0, 2, &yPlusOffset);
+				assert(result == KTX_SUCCESS);
+				result = ktxTexture_GetImageOffset(ktxTexture, level, 0, 3, &yMinusOffset);
+				assert(result == KTX_SUCCESS);
+
+				// 计算当前mip级别的尺寸和数据大小
+				uint32_t levelWidth = ktxTexture->baseWidth >> level;
+				uint32_t levelHeight = ktxTexture->baseHeight >> level;
+				uint32_t imageSize = levelWidth * levelHeight * elementSize;
+
+				// 获取两个面的数据指针
+				uint8_t* yPlusData = ktxTextureData + yPlusOffset;
+				uint8_t* yMinusData = ktxTextureData + yMinusOffset;
+
+				// 创建临时缓冲区存储+Y面数据
+				std::vector<uint8_t> tempData(imageSize);
+				memcpy(tempData.data(), yPlusData, imageSize);
+
+				// 将-Y面数据复制到+Y面位置
+				memcpy(yPlusData, yMinusData, imageSize);
+
+				// 将原始+Y面数据（临时存储）复制到-Y面位置
+				memcpy(yMinusData, tempData.data(), imageSize);
+			}
+		}
 
 		VkMemoryAllocateInfo memAllocInfo = vks::initializers::memoryAllocateInfo();
 		VkMemoryRequirements memReqs;

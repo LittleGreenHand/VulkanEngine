@@ -582,7 +582,7 @@ vkglTF::Mesh::~Mesh() {
 	glTF node
 */
 glm::mat4 vkglTF::Node::localMatrix() {
-	return glm::translate(glm::mat4(1.0f), -translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
+	return glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
 }
 
 glm::mat4 vkglTF::Node::getWorldMatrix() {
@@ -617,6 +617,18 @@ void vkglTF::Node::update() {
 
 	for (auto& child : children) {
 		child->update();
+	}
+}
+
+void vkglTF::Node::clearTransform() {
+	translation = { 0, 0, 0 };
+	scale = { 1.0f, 1.0f, 1.0f };
+	rotation.x = 0;
+	rotation.y = 0;
+	rotation.z = 0;
+	rotation.w = 1;
+	for (auto& child : children) {
+		child->clearTransform();
 	}
 }
 
@@ -879,7 +891,8 @@ void vkglTF::Model::loadNode(vkglTF::Node *parent, const tinygltf::Node &node, u
 				const float *bufferPos = nullptr;
 				const float *bufferNormals = nullptr;
 				const float *bufferTexCoords = nullptr;
-				const float* bufferColors = nullptr;
+				const void* bufferColors = nullptr;
+				int bufferColorsType = -1;
 				const float *bufferTangents = nullptr;
 				uint32_t numColorComponents;
 				const uint16_t *bufferJoints = nullptr;
@@ -912,7 +925,8 @@ void vkglTF::Model::loadNode(vkglTF::Node *parent, const tinygltf::Node &node, u
 					const tinygltf::BufferView& colorView = model.bufferViews[colorAccessor.bufferView];
 					// Color buffer are either of type vec3 or vec4
 					numColorComponents = colorAccessor.type == TINYGLTF_PARAMETER_TYPE_FLOAT_VEC3 ? 3 : 4;
-					bufferColors = reinterpret_cast<const float*>(&(model.buffers[colorView.buffer].data[colorAccessor.byteOffset + colorView.byteOffset]));
+					bufferColorsType = colorAccessor.componentType;
+					bufferColors = reinterpret_cast<const void*>(&(model.buffers[colorView.buffer].data[colorAccessor.byteOffset + colorView.byteOffset]));
 				}
 
 				if (primitive.attributes.find("TANGENT") != primitive.attributes.end())
@@ -946,13 +960,54 @@ void vkglTF::Model::loadNode(vkglTF::Node *parent, const tinygltf::Node &node, u
 					vert.normal = glm::normalize(glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
 					vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
 					if (bufferColors) {
-						switch (numColorComponents) {
-							case 3: 
-								vert.color = glm::vec4(glm::make_vec3(&bufferColors[v * 3]), 1.0f);
-								break;
-							case 4:
-								vert.color = glm::make_vec4(&bufferColors[v * 4]);
-								break;
+						switch (bufferColorsType)
+						{
+						case TINYGLTF_COMPONENT_TYPE_BYTE:
+						{
+							int8_t* buf = (int8_t*)bufferColors;
+							vert.color = glm::vec4(glm::make_vec4(&buf[v * numColorComponents])) / 127.0f;
+							break;
+						}
+						case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+						{
+							uint8_t* buf = (uint8_t*)bufferColors;
+							vert.color = glm::vec4(glm::make_vec4(&buf[v * numColorComponents])) / 255.0f;
+							break;
+						}
+						case TINYGLTF_COMPONENT_TYPE_SHORT:
+						{
+							int16_t* buf = (int16_t*)bufferColors;
+							vert.color = glm::vec4(glm::make_vec4(&buf[v * numColorComponents])) / 32767.0f;
+							break;
+						}
+						case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+						{
+							uint16_t* buf = (uint16_t*)bufferColors;
+							vert.color = glm::vec4(glm::make_vec4(&buf[v * numColorComponents])) / 65535.0f;
+							break;
+						}
+						case TINYGLTF_COMPONENT_TYPE_INT:
+						{
+							int32_t* buf = (int32_t*)bufferColors;
+							vert.color = glm::vec4(glm::make_vec4(&buf[v * numColorComponents])) / 2147483647.0f;
+							break;
+						}
+						case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
+						{
+							uint32_t* buf = (uint32_t*)bufferColors;
+							vert.color = glm::vec4(glm::make_vec4(&buf[v * numColorComponents])) / 4294967295.0f;
+							break;
+						}
+						case TINYGLTF_COMPONENT_TYPE_FLOAT:
+						{
+							float* buf = (float*)bufferColors;
+							vert.color = glm::vec4(glm::make_vec4(&buf[v * numColorComponents]));
+							break;
+						}
+						default:
+							// 未知类型默认红色
+							vert.color = glm::vec4(1.0f, 0, 0, 1.0f);
+							break;
 						}
 					}
 					else {
@@ -1274,6 +1329,7 @@ void vkglTF::Model::loadFromFile(std::string filename, vks::VulkanDevice *device
 	tinygltf::asset_manager = androidApp->activity->assetManager;
 #endif
 	size_t pos = filename.find_last_of('/');
+	std::string name = filename.substr(pos + 1);
 	path = filename.substr(0, pos);
 
 	std::string error, warning;
@@ -1297,7 +1353,7 @@ void vkglTF::Model::loadFromFile(std::string filename, vks::VulkanDevice *device
 		loadMaterials(gltfModel);
 		const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene > -1 ? gltfModel.defaultScene : 0];
 		vkglTF::Node* rootNode = new Node{};
-		rootNode->name = filename;
+		rootNode->name = name;
 		nodes.push_back(rootNode);
 		for (size_t i = 0; i < scene.nodes.size(); i++) {
 			const tinygltf::Node node = gltfModel.nodes[scene.nodes[i]];

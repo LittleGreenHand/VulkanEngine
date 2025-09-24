@@ -137,7 +137,7 @@ def getShaderStages(filename):
     }
     
     try:
-        with open(filename, 'r') as f:
+        with open(filename, 'r', encoding='utf-8') as f:
             content = f.read()
             for stage, tag in stage_tags.items():
                 if tag in content:

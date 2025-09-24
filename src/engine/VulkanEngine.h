@@ -19,6 +19,13 @@
 #include "PipelineBuilder.h"
 #include "VulkanLights.h"
 
+enum GLTFModels {
+	M_Cube,
+	M_Cerberus,
+	M_Sponza,
+	M_Sphere,
+	M_Axis
+};
 class VulkanEngine : public VulkanEngineBase
 {
 public:
@@ -39,12 +46,8 @@ public:
 		vks::Texture2D roughnessMap;
 	} textures{};
 
-	struct Meshes {
-		vkglTF::Model skybox;
-		vkglTF::Model cerberus;
-		vkglTF::Model sponza;
-		vkglTF::Model sphere;
-	} models;
+	std::map<GLTFModels, vkglTF::Model> models;
+	vkglTF::Model skybox;
 
 	struct UniformBuffers {
 		vks::Buffer globalParamBuffer;
@@ -88,8 +91,8 @@ public:
 		camera.movementSpeed = 3.0f;
 		camera.setPerspective(60.0f, (float)width / (float)height, 0.1f, 256.0f);
 		camera.rotationSpeed = 0.25f;
-		camera.setRotation({ 0.0f, 180.0f, 0.0f });
-		camera.setPosition({ 0.f, 0.f, 5.f });
+		camera.setRotation({ 0.0f, 0.0f, 0.0f });
+		camera.setPosition({ 0.f, 3.f, 5.f });
 	}
 
 	~VulkanEngine()

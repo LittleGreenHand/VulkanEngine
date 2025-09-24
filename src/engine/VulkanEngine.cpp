@@ -17,35 +17,51 @@ void VulkanEngine::loadAssets()
 {
 	auto tStart = std::chrono::high_resolution_clock::now();
 
-	uint32_t glTFLoadingFlags = vkglTF::FileLoadingFlags::PreTransformVertices | vkglTF::FileLoadingFlags::PreMultiplyVertexColors;
-	models.cerberus.loadFromFile(getAssetPath() + "models/cerberus/cerberus.gltf", vulkanDevice, queue, glTFLoadingFlags);
-	textures.environmentCube.loadFromFile(getAssetPath() + "textures/hdr/gcanyon_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
+	//加载纹理
+	textures.environmentCube.loadFromFile(getAssetPath() + "textures/hdr/gcanyon_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, true);
 	textures.albedoMap.loadFromFile(getAssetPath() + "models/cerberus/albedo.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
 	textures.normalMap.loadFromFile(getAssetPath() + "models/cerberus/normal.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
 	textures.aoMap.loadFromFile(getAssetPath() + "models/cerberus/ao.ktx", VK_FORMAT_R8_UNORM, vulkanDevice, queue);
 	textures.metallicMap.loadFromFile(getAssetPath() + "models/cerberus/metallic.ktx", VK_FORMAT_R8_UNORM, vulkanDevice, queue);
 	textures.roughnessMap.loadFromFile(getAssetPath() + "models/cerberus/roughness.ktx", VK_FORMAT_R8_UNORM, vulkanDevice, queue);
-	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.setBaseColorTexture(&textures.albedoMap);
-	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.setNormalTexture(&textures.normalMap);
-	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.setAOTexture(&textures.aoMap);
-	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.setMetallicTexture(&textures.metallicMap);
-	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.setRoughnessTexture(&textures.roughnessMap);
-	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.updateDescriptorSet();
-	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.materialParameters.metallicFactor = 1;
-	models.cerberus.linearNodes[0]->mesh->primitives[0]->material.materialParameters.roughnessFactor = 1;
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.environmentCube.image, "environmentCube");
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.albedoMap.image, "albedoMap");
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.normalMap.image, "normalMap");
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.aoMap.image, "aoMap");
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.metallicMap.image, "metallicMap");
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.roughnessMap.image, "roughnessMap");
-	models.cerberus.nodes[0]->rotation = vkUtils::eularToQuaternion(glm::vec3(90, 90, 0));
-	models.cerberus.nodes[0]->translation = (glm::vec3(-2, 0.5, 0));
-	models.cerberus.nodes[0]->update();
+
+	//加载模型
+	uint32_t glTFLoadingFlags = vkglTF::FileLoadingFlags::PreTransformVertices | vkglTF::FileLoadingFlags::PreMultiplyVertexColors;
+	models[M_Cerberus].loadFromFile(getAssetPath() + "models/cerberus/cerberus.gltf", vulkanDevice, queue, glTFLoadingFlags);
+	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.setBaseColorTexture(&textures.albedoMap);
+	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.setNormalTexture(&textures.normalMap);
+	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.setAOTexture(&textures.aoMap);
+	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.setMetallicTexture(&textures.metallicMap);
+	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.setRoughnessTexture(&textures.roughnessMap);
+	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.updateDescriptorSet();
+	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.materialParameters.metallicFactor = 1;
+	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.materialParameters.roughnessFactor = 1;
+	models[M_Cerberus].nodes[0]->clearTransform();
+	models[M_Cerberus].nodes[0]->rotation = vkUtils::eularToQuaternion(glm::vec3(-90, 0, 0));
+	models[M_Cerberus].nodes[0]->translation = (glm::vec3(0, 0, 0));
+	models[M_Cerberus].nodes[0]->update();
 		
-	models.skybox.loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, queue, glTFLoadingFlags);
-	models.sphere.loadFromFile(getAssetPath() + "models/sphere.gltf", vulkanDevice, queue, glTFLoadingFlags);
-	models.sponza.loadFromFile(getAssetPath() + "models/sponza/sponza.gltf", vulkanDevice, queue, glTFLoadingFlags);
+	models[M_Cube].loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, queue, glTFLoadingFlags);
+	models[M_Cube].nodes[0]->clearTransform();
+	models[M_Cube].nodes[0]->update();
+		
+	models[M_Axis].loadFromFile(getAssetPath() + "models/axis.gltf", vulkanDevice, queue, glTFLoadingFlags);
+	models[M_Axis].nodes[0]->clearTransform();
+	models[M_Axis].nodes[0]->update();
+	models[M_Sphere].loadFromFile(getAssetPath() + "models/sphere.gltf", vulkanDevice, queue, glTFLoadingFlags);
+	models[M_Sphere].nodes[0]->clearTransform();
+	models[M_Sphere].nodes[0]->update();
+	models[M_Sponza].loadFromFile(getAssetPath() + "models/sponza/sponza.gltf", vulkanDevice, queue, glTFLoadingFlags);
+	models[M_Sponza].nodes[0]->clearTransform();
+	models[M_Sponza].nodes[0]->update();
+
+	skybox.loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, queue, glTFLoadingFlags);
 
 	auto tEnd = std::chrono::high_resolution_clock::now(); 
 	auto takeTime = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
@@ -190,7 +206,7 @@ void VulkanEngine::updateUniformBuffers()
 	globalParam.view = camera.matrices.view;
 	globalParam.inverseView = glm::inverse(camera.matrices.view);
 	globalParam.projection = camera.matrices.perspective;
-	globalParam.camPos = camera.position * -1.0f;//转为Y向下的右手系
+	globalParam.camPos = camera.position;
 	
 	memcpy(globalParamBuffers[currentBuffer].globalParamBuffer.mapped, &globalParam, sizeof(GlobalParams));
 }
@@ -249,19 +265,22 @@ void VulkanEngine::buildCommandBuffer()
 		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline skybox", { 1.0f, 1.0f, 1.0f });
 		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.skybox);
 		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.skyboxPipelineLayout, 0, 2, descriptorSetsArray.data(), 0, nullptr);
-		models.skybox.draw(cmdBuffer);//不需要绑定材质描述符集
+		skybox.draw(cmdBuffer);//不需要绑定材质描述符集
 		vkUtils::cmdEndLabel(cmdBuffer);
 	}
 
 	//PBR
-	vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline PBR", { 1.0f, 1.0f, 1.0f });
-	vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbr);
-	vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbrPipelineLayout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
+	{
+		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline PBR", { 1.0f, 1.0f, 1.0f });
+		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbr);
+		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbrPipelineLayout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
 
-	models.cerberus.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout);
-	models.sponza.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout);
-	models.sphere.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout);
-	vkUtils::cmdEndLabel(cmdBuffer);
+		for (auto& [key, model] : models)
+		{
+			model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout);
+		}
+		vkUtils::cmdEndLabel(cmdBuffer);
+	}
 
 	// UI
 	drawUI(cmdBuffer);
@@ -319,21 +338,31 @@ void VulkanEngine::drawNodeTree()
 	int nodeId = 0;
 	{
 		// 创建左右分栏布局
-		ImGui::Begin("场景树",0, ImGuiWindowFlags_AlwaysAutoResize);
+		ImGui::Begin("场景树");
 
 		// 左侧节点树
 		ImGui::BeginChild("节点树", ImVec2(400, 800), true);
-		for (vkglTF::Node* node : models.cerberus.nodes)
+		static bool visibleAll = true;
+		if(ImGui::Checkbox("显示所有模型", &visibleAll))
 		{
-			vkUtils::DrawNodeTree(node, nodeId);
+			if(visibleAll)
+			{
+				for (auto& [key, model] : models)
+				{
+					model.nodes[0]->visible = true;
+				}
+			}
+			else
+			{
+				for (auto& [key, model] : models)
+				{
+					model.nodes[0]->visible = false;
+				}
+			}
 		}
-		for (vkglTF::Node* node : models.sponza.nodes)
+		for (auto& [key, model] : models)
 		{
-			vkUtils::DrawNodeTree(node, nodeId);
-		}
-		for (vkglTF::Node* node : models.sphere.nodes)
-		{
-			vkUtils::DrawNodeTree(node, nodeId);
+			vkUtils::DrawNodeTree(model.nodes[0], nodeId);
 		}
 		ImGui::EndChild();
 

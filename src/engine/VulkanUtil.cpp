@@ -654,7 +654,7 @@ void vkUtils::generateIrradianceCube(vks::TextureCubeMap& irradianceCube, vks::T
 			vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 			vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelinelayout, 0, 1, &descriptorset, 0, NULL);
 
-			vkEngine->models.skybox.draw(cmdBuf);
+			vkEngine->models[M_Cube].draw(cmdBuf);
 
 			vkCmdEndRenderPass(cmdBuf);
 
@@ -1035,7 +1035,7 @@ void vkUtils::generatePrefilteredCube(vks::TextureCubeMap& prefilteredCube, vks:
 			vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 			vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelinelayout, 0, 1, &descriptorset, 0, NULL);
 
-			vkEngine->models.skybox.draw(cmdBuf);
+			vkEngine->models[M_Cube].draw(cmdBuf);
 
 			vkCmdEndRenderPass(cmdBuf);
 
@@ -1201,7 +1201,7 @@ void vkUtils::DrawNodePropertiesPanel()
 
 	// 节点名称编辑
 	char nameBuffer[256];
-	strncpy(nameBuffer, selectedNode->name.c_str(), sizeof(nameBuffer) - 1);
+	strncpy_s(nameBuffer, selectedNode->name.c_str(), sizeof(nameBuffer) - 1);
 	nameBuffer[sizeof(nameBuffer) - 1] = '\0';
 	if (ImGui::InputText("Name", nameBuffer, sizeof(nameBuffer)))
 	{
@@ -1236,7 +1236,7 @@ void vkUtils::DrawNodePropertiesPanel()
 		ImGui::Separator();
 		ImGui::Text("Mesh: %s", selectedNode->mesh->name.c_str());
 
-		for (size_t i = 0; i < selectedNode->mesh->primitives.size(); ++i)
+		for (int i = 0; i < selectedNode->mesh->primitives.size(); ++i)
 		{
 			auto& primitive = selectedNode->mesh->primitives[i];
 			auto& material = primitive->material;

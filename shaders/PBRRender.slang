@@ -10,6 +10,7 @@ struct VSOutput
     float3 Normal;
     float2 UV;
     float3 Tangent;
+    float3 Color;
 };
 
 #define PI 3.1415926535897932384626433832795
@@ -118,13 +119,15 @@ VSOutput vertexMain(VSInput input)
     output.Normal = mul((float3x3)meshInfo.model, input.Normal);
     output.Tangent = mul((float3x3)meshInfo.model, input.Tangent.xyz);
 	output.UV = input.UV;
-	output.Pos = mul(globalParams.projection, mul(globalParams.view, float4(output.WorldPos, 1.0)));
+    output.Pos = mul(globalParams.projection, mul(globalParams.view, float4(output.WorldPos, 1.0)));
+    output.Color = input.Color;
 	return output;
 }
 
 [shader("fragment")]
 float4 fragmentMain(VSOutput input)
 {
+    //return float4(input.Color, 1.0f);
 	float3 N = calculateNormal(input);
 	float3 V = normalize(globalParams.camPos - input.WorldPos);
     float3 R = reflect(-V, N);
@@ -135,8 +138,10 @@ float4 fragmentMain(VSOutput input)
     metallic = mr.x * materialParameters.metallicFactor;
     roughness = mr.y * materialParameters.roughnessFactor;
 
-	float3 F0 = float3(0.04, 0.04, 0.04);
-	F0 = lerp(F0, ALBEDO(input.UV), metallic);
+    //float3 srcColor = materialParameters.baseColorTextureEmpty ? input.Color : ALBEDO(input.UV);
+    float3 srcColor = ALBEDO(input.UV);
+    float3 F0 = float3(0.04, 0.04, 0.04);
+    F0 = lerp(F0, srcColor, metallic);
 
     float3 Lo = float3(0.0, 0.0, 0.0);
     for (int i = 0; i < lightParameter.activeLightCount; i++) {
@@ -148,8 +153,8 @@ float4 fragmentMain(VSOutput input)
     float3 reflection = prefilteredReflection(R, roughness).rgb;
     float3 irradiance = samplerIrradiance.Sample(N).rgb;
 
-	// Diffuse based on irradiance
-	float3 diffuse = irradiance * ALBEDO(input.UV);
+    // Diffuse based on irradiance
+    float3 diffuse = irradiance * srcColor;
 
 	float3 F = F_SchlickR(max(dot(N, V), 0.0), F0, roughness);
 

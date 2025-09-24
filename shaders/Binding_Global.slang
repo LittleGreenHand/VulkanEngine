@@ -12,7 +12,7 @@ struct GlobalParams {
 	float4x4 view;
 	float4x4 inverseView;
 	float4x4 projection;
-	float3 camPos;
+    float3 camPos;
     float exposure;
     float gamma;
 };

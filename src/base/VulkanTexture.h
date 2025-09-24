@@ -93,6 +93,7 @@ class TextureCubeMap : public Texture
 	    vks::VulkanDevice *device,
 	    VkQueue            copyQueue,
 	    VkImageUsageFlags  imageUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT,
-	    VkImageLayout      imageLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	    VkImageLayout      imageLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		bool			   flipImage = false);
 };
 }        // namespace vks
