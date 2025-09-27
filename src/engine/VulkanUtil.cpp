@@ -654,7 +654,7 @@ void vkUtils::generateIrradianceCube(vks::TextureCubeMap& irradianceCube, vks::T
 			vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 			vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelinelayout, 0, 1, &descriptorset, 0, NULL);
 
-			vkEngine->models[M_Cube].draw(cmdBuf);
+			vkEngine->skybox.draw(cmdBuf);
 
 			vkCmdEndRenderPass(cmdBuf);
 
@@ -1035,7 +1035,7 @@ void vkUtils::generatePrefilteredCube(vks::TextureCubeMap& prefilteredCube, vks:
 			vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 			vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelinelayout, 0, 1, &descriptorset, 0, NULL);
 
-			vkEngine->models[M_Cube].draw(cmdBuf);
+			vkEngine->skybox.draw(cmdBuf);
 
 			vkCmdEndRenderPass(cmdBuf);
 

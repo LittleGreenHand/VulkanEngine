@@ -32,36 +32,53 @@ void VulkanEngine::loadAssets()
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.roughnessMap.image, "roughnessMap");
 
 	//加载模型
-	uint32_t glTFLoadingFlags = vkglTF::FileLoadingFlags::PreTransformVertices | vkglTF::FileLoadingFlags::PreMultiplyVertexColors;
-	models[M_Cerberus].loadFromFile(getAssetPath() + "models/cerberus/cerberus.gltf", vulkanDevice, queue, glTFLoadingFlags);
-	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.setBaseColorTexture(&textures.albedoMap);
-	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.setNormalTexture(&textures.normalMap);
-	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.setAOTexture(&textures.aoMap);
-	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.setMetallicTexture(&textures.metallicMap);
-	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.setRoughnessTexture(&textures.roughnessMap);
-	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.updateDescriptorSet();
-	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.materialParameters.metallicFactor = 1;
-	models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.materialParameters.roughnessFactor = 1;
-	models[M_Cerberus].nodes[0]->clearTransform();
-	models[M_Cerberus].nodes[0]->rotation = vkUtils::eularToQuaternion(glm::vec3(-90, 0, 0));
-	models[M_Cerberus].nodes[0]->translation = (glm::vec3(0, 0, 0));
-	models[M_Cerberus].nodes[0]->update();
-		
-	models[M_Cube].loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, queue, glTFLoadingFlags);
-	models[M_Cube].nodes[0]->clearTransform();
-	models[M_Cube].nodes[0]->update();
-		
-	models[M_Axis].loadFromFile(getAssetPath() + "models/axis.gltf", vulkanDevice, queue, glTFLoadingFlags);
-	models[M_Axis].nodes[0]->clearTransform();
-	models[M_Axis].nodes[0]->update();
-	models[M_Sphere].loadFromFile(getAssetPath() + "models/sphere.gltf", vulkanDevice, queue, glTFLoadingFlags);
-	models[M_Sphere].nodes[0]->clearTransform();
-	models[M_Sphere].nodes[0]->update();
-	models[M_Sponza].loadFromFile(getAssetPath() + "models/sponza/sponza.gltf", vulkanDevice, queue, glTFLoadingFlags);
-	models[M_Sponza].nodes[0]->clearTransform();
-	models[M_Sponza].nodes[0]->update();
+	{
+		uint32_t glTFLoadingFlags = vkglTF::FileLoadingFlags::PreTransformVertices | vkglTF::FileLoadingFlags::PreMultiplyVertexColors;
+		models[M_Cerberus].loadFromFile(getAssetPath() + "models/cerberus/cerberus.gltf", vulkanDevice, queue, glTFLoadingFlags);
+		models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.setBaseColorTexture(&textures.albedoMap);
+		models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.setNormalTexture(&textures.normalMap);
+		models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.setAOTexture(&textures.aoMap);
+		models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.setMetallicTexture(&textures.metallicMap);
+		models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.setRoughnessTexture(&textures.roughnessMap);
+		models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.updateDescriptorSet();
+		models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.materialParameters.metallicFactor = 1;
+		models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.materialParameters.roughnessFactor = 1;
+		models[M_Cerberus].nodes[0]->clearTransform();
+		models[M_Cerberus].nodes[0]->rotation = vkUtils::eularToQuaternion(glm::vec3(-90, 90, 0));
+		models[M_Cerberus].nodes[0]->translation = (glm::vec3(0.2, -0.15, -0.5));
+		models[M_Cerberus].nodes[0]->scale = (glm::vec3(0.2, 0.2, 0.2));
+		models[M_Cerberus].nodes[0]->update();
 
-	skybox.loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, queue, glTFLoadingFlags);
+		models[M_Cube].loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, queue, glTFLoadingFlags);
+		models[M_Cube].nodes[0]->clearTransform();
+		models[M_Cube].nodes[0]->scale = (glm::vec3(0.01, 0.01, 0.01));
+		models[M_Cube].nodes[0]->translation = (glm::vec3(0, -0, -1));
+		models[M_Cube].nodes[0]->visible = false;
+		models[M_Cube].nodes[0]->update();
+
+		models[M_Axis].loadFromFile(getAssetPath() + "models/axis.gltf", vulkanDevice, queue, glTFLoadingFlags);
+		models[M_Axis].nodes[0]->clearTransform();
+		models[M_Axis].nodes[0]->scale = (glm::vec3(0.1, 0.1, 0.1));
+		models[M_Axis].nodes[0]->translation = (glm::vec3(0, -0.15, -1));
+		models[M_Axis].nodes[0]->visible = false;
+		models[M_Axis].nodes[0]->update();
+
+		models[M_Sphere].loadFromFile(getAssetPath() + "models/sphere.gltf", vulkanDevice, queue, glTFLoadingFlags);
+		models[M_Sphere].nodes[0]->clearTransform();
+		models[M_Sphere].nodes[0]->scale = (glm::vec3(0.1, 0.1, 0.1));
+		models[M_Sphere].nodes[0]->translation = (glm::vec3(0, -0, -1));
+		models[M_Sphere].nodes[0]->visible = false;
+		models[M_Sphere].nodes[0]->update();
+
+		models[M_Sponza].loadFromFile(getAssetPath() + "models/sponza/sponza.gltf", vulkanDevice, queue, glTFLoadingFlags);
+		models[M_Sponza].nodes[0]->clearTransform();
+		models[M_Sponza].nodes[0]->rotation = vkUtils::eularToQuaternion(glm::vec3(0, 90, 0));
+		models[M_Sponza].nodes[0]->translation = (glm::vec3(0, -1, 0));
+		models[M_Sponza].nodes[0]->update();
+
+		skybox.loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, queue, glTFLoadingFlags);
+	}
+
 
 	auto tEnd = std::chrono::high_resolution_clock::now(); 
 	auto takeTime = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
@@ -341,7 +358,7 @@ void VulkanEngine::drawNodeTree()
 		ImGui::Begin("场景树");
 
 		// 左侧节点树
-		ImGui::BeginChild("节点树", ImVec2(400, 800), true);
+		ImGui::BeginChild("节点树", ImVec2(300, 800), true);
 		static bool visibleAll = true;
 		if(ImGui::Checkbox("显示所有模型", &visibleAll))
 		{
