@@ -54,7 +54,7 @@ public:
 	};
 	std::array<UniformBuffers, maxConcurrentFrames> globalParamBuffers;
 
-	struct GlobalParams {
+	struct alignas(16) GlobalParams {
 		glm::mat4 view;
 		glm::mat4 inverseView;
 		glm::mat4 projection;
@@ -89,7 +89,7 @@ public:
 		title = "VulkanEngine";
 		camera.type = Camera::CameraType::firstperson;
 		camera.movementSpeed = 1.0f;
-		camera.setPerspective(60.0f, (float)width / (float)height, 0.1f, 256.0f);
+		camera.setPerspective(60.0f, (float)width / (float)height, 0.0001f, 256.0f);
 		camera.rotationSpeed = 0.25f;
 		camera.setRotation({ 0.0f, 0.0f, 0.0f });
 		camera.setPosition({ 0.f, 0.f, 0.f });

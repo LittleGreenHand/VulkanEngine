@@ -1,6 +1,6 @@
 struct LightInfo {
     float4 position;
-    float4 color;
+    float3 color;
 };
 struct LightParameters
 {

@@ -245,7 +245,7 @@ namespace vkglTF
 			void* mapped;
 		} uniformBuffer;
 
-		struct UniformBlock {
+		struct alignas(16) UniformBlock {
 			glm::mat4 modelMatrix;
 			glm::mat4 jointMatrix[64]{};
 			float jointcount{ 0 };
@@ -255,9 +255,6 @@ namespace vkglTF
 		~Mesh();
 		void updateUniformBuffer()
 		{
-			//uniformBlock.modelMatrix[3][0] *= -1;
-			//uniformBlock.modelMatrix[3][1] *= -1;
-			//uniformBlock.modelMatrix[3][2] *= -1;
 			memcpy(uniformBuffer.mapped, &uniformBlock, sizeof(uniformBlock));
 		}
 	};

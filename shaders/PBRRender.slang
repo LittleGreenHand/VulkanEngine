@@ -87,23 +87,21 @@ float3 prefilteredReflection(float3 R, float roughness)
 
 // 计算镜面反射贡献
 // 综合运用D、G、F函数计算PBR中的直接光照镜面反射部分
-// inColor: 像素的基础颜色
+// inColor: fragment颜色
+// lightColor: 光源颜色
 // L: 光线方向
 // V: 观察方向
 // N: 法向量
 // F0: 基础反射率
 // metallic: 金属度
 // roughness: 粗糙度
-float3 specularContribution(float3 inColor, float3 L, float3 V, float3 N, float3 F0, float metallic, float roughness)
+float3 specularContribution(float3 inColor, float3 lightColor, float3 L, float3 V, float3 N, float3 F0, float metallic, float roughness)
 {
     // 计算半程向量（光线方向与观察方向的中间向量）
 	float3 H = normalize (V + L);
 	float dotNH = clamp(dot(N, H), 0.0, 1.0);
 	float dotNV = clamp(dot(N, V), 0.0, 1.0);
     float dotNL = clamp(dot(N, L), 0.0, 1.0);
-
-    // 光源颜色（此处固定为白色，实际应用中可从光源参数获取）
-	float3 lightColor = float3(1.0, 1.0, 1.0);
 
     float3 color = float3(0.0, 0.0, 0.0);
 
@@ -238,7 +236,7 @@ float4 fragmentMain(VSOutput input)
         // 计算光线方向（从像素位置到光源位置）
         float3 L = normalize(lightParameter.lights[i].position.xyz - input.WorldPos);
         // 累加每个光源的贡献
-        Lo += specularContribution(srcColor, L, V, N, F0, metallic, roughness);
+        Lo += specularContribution(srcColor, lightParameter.lights[i].color, L, V, N, F0, metallic, roughness);
 	}
 
     // 采样BRDF查找表，获取环境镜面反射的预计算值

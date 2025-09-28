@@ -330,23 +330,38 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 			float znear = camera.znear;
 			float zfar = camera.zfar;
 			ImGui::InputFloat("FOV", &fov, 0.5f, 5, "%.1f");
-			ImGui::InputFloat("NearPlane", &znear, 1, 100, "%.1f");
+			ImGui::InputFloat("NearPlane", &znear, 1, 100, "%.4f");
 			ImGui::InputFloat("FarPlane", &zfar, 1, 100, "%.1f");
 			if(fov != camera.fov || znear != camera.znear || zfar != camera.zfar)
 				camera.setPerspective(fov, (float)width / (float)height, znear, zfar);
 		}
 		ImGui::Unindent();
 	}
-	if (ImGui::CollapsingHeader("PBR设置"), ImGuiTreeNodeFlags_DefaultOpen) {
+	if (ImGui::CollapsingHeader("全局设置"), ImGuiTreeNodeFlags_DefaultOpen) {
 		ImGui::Indent();
 		{
-			ImGui::InputFloat3("光源0", (float*)&lights.lightData.lights[0].position, "%.2f");
-			ImGui::InputFloat3("光源1", (float*)&lights.lightData.lights[1].position, "%.2f");
-			ImGui::InputFloat3("光源2", (float*)&lights.lightData.lights[2].position, "%.2f");
-			ImGui::InputFloat3("光源3", (float*)&lights.lightData.lights[3].position, "%.2f");
 			ImGui::InputFloat("曝光", &globalParam.exposure, 0.01f, 0.1f, "%.2f");
 			ImGui::InputFloat("Gamma", &globalParam.gamma, 0.01f, 0.1f, "%.2f");
 			ImGui::Checkbox("Skybox", &displaySkybox);
+		}
+		ImGui::Unindent();
+	}
+	if (ImGui::CollapsingHeader("光源设置"), ImGuiTreeNodeFlags_DefaultOpen) {
+		ImGui::Indent();
+		{
+			if(ImGui::SliderInt("光源数量", &lights.lightData.activeLightCount, 0, MAX_LIGHTS))
+			{
+				lights.updateLightBuffer();
+			}
+			for (int i = 0; i < lights.lightData.activeLightCount; i++)
+			{
+				std::string lightName = "光源" + std::to_string(i);
+				if (ImGui::InputFloat3((lightName + "位置").c_str(), (float*)&lights.lightData.lights[i].position, "%.2f") ||
+					ImGui::ColorEdit3((lightName + "颜色").c_str(), (float*)&lights.lightData.lights[i].color))
+				{
+					lights.updateLightBuffer();
+				}
+			}
 		}
 		ImGui::Unindent();
 	}
