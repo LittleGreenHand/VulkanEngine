@@ -370,12 +370,12 @@ namespace vkglTF
 	*/
 	class Model {
 	private:
-		vks::Texture* getTexture(uint32_t index);
 		vks::Texture emptyTexture;
 		void createEmptyTexture(VkQueue transferQueue);
 	public:
 		vks::VulkanDevice* device;
 		VkDescriptorPool descriptorPool;
+		std::string modelName;
 
 		struct Vertices {
 			int count;
@@ -411,6 +411,7 @@ namespace vkglTF
 
 		Model() {};
 		~Model();
+		vks::Texture* getTexture(uint32_t index);
 		void loadNode(vkglTF::Node* parent, const tinygltf::Node& node, uint32_t nodeIndex, const tinygltf::Model& model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale);
 		void loadSkins(tinygltf::Model& gltfModel);
 		void loadImages(tinygltf::Model& gltfModel, vks::VulkanDevice* device, VkQueue transferQueue);

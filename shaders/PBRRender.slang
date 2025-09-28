@@ -125,19 +125,38 @@ float3 specularContribution(float3 inColor, float3 L, float3 V, float3 N, float3
 
 	return color;
 }
-
+bool isZeroVector(float3 v) {
+    float lenSq = dot(v, v);
+    return lenSq < 1e-9;
+}
 // 计算世界空间中的法向量（考虑法线贴图）
 // 从法线纹理中采样并通过TBN矩阵转换到世界空间
 float3 calculateNormal(VSOutput input)
 {
+    if(materialParameters.normalTextureEmpty != 0)
+    {
+        return normalize(input.Normal);
+    }
+
     // 从法线纹理采样并转换范围：[0,1] → [-1,1]
-    float3 tangentNormal = (materialParameters.normalTextureEmpty ? input.Normal : normalTexture.Sample(input.UV).xyz) * 2.0 - 1.0;
+    float3 tangentNormal = normalTexture.Sample(input.UV).xyz * 2.0 - 1.0;
 
     // 构建TBN矩阵（切线-副切线-法线矩阵）
     // 世界空间法向量
 	float3 N = normalize(input.Normal);
     // 世界空间切线向量
     float3 T = normalize(input.Tangent);
+    if (isZeroVector(input.Tangent))
+    {
+        // 计算世界空间位置和纹理坐标的导数
+        float3 dPdx = ddx(input.WorldPos);
+        float3 dPdy = ddy(input.WorldPos);
+        float2 dUVdx = ddx(input.UV);
+        float2 dUVdy = ddy(input.UV);
+
+        // 求解切线向量
+        float3 T = normalize(dPdx * dUVdy.y - dPdy * dUVdx.y);
+    }
     // 计算副切线向量
 	float3 B = normalize(cross(N, T));
 	float3x3 TBN = transpose(float3x3(T, B, N));
@@ -163,7 +182,6 @@ VSOutput vertexMain(VSInput input)
 [shader("fragment")]
 float4 fragmentMain(VSOutput input)
 {
-    //return float4(input.Color, 1.0f);
 	float3 N = calculateNormal(input);
 	float3 V = normalize(globalParams.camPos - input.WorldPos);
     float3 R = reflect(-V, N);
@@ -172,9 +190,9 @@ float4 fragmentMain(VSOutput input)
     float roughness = 1.0;
 
     float2 mr;
-    if (materialParameters.mergeMetallicRoughnessTexture)
+    if (materialParameters.mergeMetallicRoughnessTexture != 0)
     {
-        if (materialParameters.metallicRoughnessTextureEmpty)
+        if (materialParameters.metallicRoughnessTextureEmpty != 0)
         {
             mr = float2(1.0, 1.0);
         }
@@ -188,11 +206,11 @@ float4 fragmentMain(VSOutput input)
         float metallicVal = 1.0;
         float roughnessVal = 1.0;
 
-        if (!materialParameters.metallicTextureEmpty)
+        if (!materialParameters.metallicTextureEmpty != 0)
         {
             metallicVal = metallicTexture.Sample(input.UV).r;
         }
-        if (!materialParameters.roughnessTextureEmpty)
+        if (!materialParameters.roughnessTextureEmpty != 0)
         {
             roughnessVal = roughnessTexture.Sample(input.UV).r;
         }
@@ -208,7 +226,7 @@ float4 fragmentMain(VSOutput input)
     metallic = clamp(metallic, 0.0, 1.0);
     roughness = clamp(roughness, 0.0, 1.0);
 
-    float3 srcColor = materialParameters.baseColorTextureEmpty ? input.Color : ALBEDO(input.UV);
+    float3 srcColor = materialParameters.baseColorTextureEmpty != 0 ? input.Color : ALBEDO(input.UV);
     float3 F0 = float3(0.04, 0.04, 0.04);
     // 计算基础反射率F0
     // 非金属材质使用0.04的默认值，金属材质使用反照率颜色
@@ -246,7 +264,7 @@ float4 fragmentMain(VSOutput input)
     float3 kD = 1.0 - F;
     kD *= 1.0 - metallic;
     // 采样AO值（存在则采样，不存在则用默认值1.0）
-    float3 ao = materialParameters.AOTextureEmpty ? float3(1.0, 1.0, 1.0) : AOTexture.Sample(input.UV).rrr;
+    float3 ao = materialParameters.AOTextureEmpty != 0 ? float3(1.0, 1.0, 1.0) : AOTexture.Sample(input.UV).rrr;
 
     // 计算环境光（使用处理后的AO值）
     float3 ambient = (kD * diffuse + specular) * ao;

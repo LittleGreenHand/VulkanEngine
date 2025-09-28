@@ -1330,6 +1330,7 @@ void vkglTF::Model::loadFromFile(std::string filename, vks::VulkanDevice *device
 #endif
 	size_t pos = filename.find_last_of('/');
 	std::string name = filename.substr(pos + 1);
+	modelName = name;
 	path = filename.substr(0, pos);
 
 	std::string error, warning;

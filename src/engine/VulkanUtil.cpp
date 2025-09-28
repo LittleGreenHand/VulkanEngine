@@ -141,6 +141,24 @@ void vkUtils::setObjectDebugName(VkObjectType object_type, uint64_t object_handl
 	vkSetDebugUtilsObjectNameEXT(vkEngine->device, &name_info);
 }
 
+void vkUtils::InitModelsSourceDebugName(std::map<GLTFModels, vkglTF::Model>& models)
+{
+	for (auto& [key, model] : models)
+	{
+		for (int i = 0; i < model.materials.size(); i++)
+		{
+			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)model.materials[i].descriptorSet, model.modelName + "_Material_" + std::to_string(i) + "DescriptorSet");
+		}
+		for(int i = 0; i<model.linearNodes.size(); i++)
+		{
+			if (model.linearNodes[i]->mesh)
+			{
+				vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)model.linearNodes[i]->mesh->uniformBuffer.descriptorSet, model.linearNodes[i]->name + "_MeshDescriptorSet");
+			}
+		}
+	}
+}
+
 void vkUtils::generateBRDFLUT(vks::Texture2D& lutBrdf)
 {
 	if (!init)

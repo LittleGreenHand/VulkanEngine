@@ -35,6 +35,8 @@ public:
 	static void queueEndLabel(VkQueue queue);
 	static void setObjectDebugName(VkObjectType object_type, uint64_t object_handle, std::string object_name);
 
+	//为glTF模型中的vulkan资源设置调试名称
+	static void InitModelsSourceDebugName(std::map<GLTFModels, vkglTF::Model>& models);
 public:
 	//PBR生成相关
 

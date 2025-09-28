@@ -76,6 +76,8 @@ void VulkanEngine::loadAssets()
 		models[M_Sponza].nodes[0]->translation = (glm::vec3(0, -1, 0));
 		models[M_Sponza].nodes[0]->update();
 
+		vkUtils::InitModelsSourceDebugName(models);
+
 		skybox.loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, queue, glTFLoadingFlags);
 	}
 
