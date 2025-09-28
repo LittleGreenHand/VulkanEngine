@@ -17,8 +17,9 @@ struct VSOutput
 #define ALBEDO(uv) pow(baseColorTexture.Sample(uv).rgb, float3(2.2, 2.2, 2.2))
 //#define ALBEDO(uv) pow(materialParameters.baseColorTextureEmpty ? float3(1.0, 0, 0) : baseColorTexture.Sample(uv).rgb, float3(2.2, 2.2, 2.2))
 
-
 // From http://filmicgames.com/archives/75
+// 色调映射函数：Uncharted 2游戏使用的HDR到LDR转换算法
+// 作用是将高动态范围的渲染结果压缩到适合显示器的低动态范围
 float3 Uncharted2Tonemap(float3 x)
 {
 	float A = 0.15;
@@ -30,7 +31,10 @@ float3 Uncharted2Tonemap(float3 x)
 	return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
 }
 
-// Normal Distribution function --------------------------------------
+// 正态分布函数(D)：GGX模型
+// 描述微平面的朝向分布，决定高光的形状和集中度
+// dotNH: 法向量与半程向量的点积
+// roughness: 粗糙度，值越大表面越粗糙
 float D_GGX(float dotNH, float roughness)
 {
 	float alpha = roughness * roughness;
@@ -39,7 +43,10 @@ float D_GGX(float dotNH, float roughness)
 	return (alpha2)/(PI * denom*denom);
 }
 
-// Geometric Shadowing function --------------------------------------
+// 几何函数(G)：Schlick-Smith GGX模型
+// 模拟微平面之间的相互遮挡，影响高光的衰减
+// dotNL: 法向量与光线方向的点积
+// dotNV: 法向量与观察方向的点积
 float G_SchlicksmithGGX(float dotNL, float dotNV, float roughness)
 {
 	float r = (roughness + 1.0);
@@ -49,19 +56,27 @@ float G_SchlicksmithGGX(float dotNL, float dotNV, float roughness)
 	return GL * GV;
 }
 
-// Fresnel function ----------------------------------------------------
+// 菲涅尔函数(F)：Schlick近似
+// 描述不同角度下光线的反射率变化，边缘通常反射更强
+// cosTheta: 入射角的余弦值（观察方向与法向量的夹角）
+// F0: 基础反射率（0度入射角时的反射率）
 float3 F_Schlick(float cosTheta, float3 F0)
 {
 	return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
+// 改进的菲涅尔函数，考虑粗糙度影响
 float3 F_SchlickR(float cosTheta, float3 F0, float roughness)
 {
 	return F0 + (max((1.0 - roughness).xxx, F0) - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
+// 预过滤环境反射采样
+// 根据粗糙度选择不同级别的mipmap，实现模糊的反射效果
+// R: 反射方向向量
+// roughness: 粗糙度，控制反射模糊程度
 float3 prefilteredReflection(float3 R, float roughness)
 {
-	const float MAX_REFLECTION_LOD = 9.0; // todo: param/const
+	const float MAX_REFLECTION_LOD = 9.0;
 	float lod = roughness * MAX_REFLECTION_LOD;
 	float lodf = floor(lod);
     float lodc = ceil(lod);
@@ -70,43 +85,64 @@ float3 prefilteredReflection(float3 R, float roughness)
 	return lerp(a, b, lod - lodf);
 }
 
-float3 specularContribution(float2 inUV, float3 L, float3 V, float3 N, float3 F0, float metallic, float roughness)
+// 计算镜面反射贡献
+// 综合运用D、G、F函数计算PBR中的直接光照镜面反射部分
+// inColor: 像素的基础颜色
+// L: 光线方向
+// V: 观察方向
+// N: 法向量
+// F0: 基础反射率
+// metallic: 金属度
+// roughness: 粗糙度
+float3 specularContribution(float3 inColor, float3 L, float3 V, float3 N, float3 F0, float metallic, float roughness)
 {
-	// Precalculate vectors and dot products
+    // 计算半程向量（光线方向与观察方向的中间向量）
 	float3 H = normalize (V + L);
 	float dotNH = clamp(dot(N, H), 0.0, 1.0);
 	float dotNV = clamp(dot(N, V), 0.0, 1.0);
-	float dotNL = clamp(dot(N, L), 0.0, 1.0);
+    float dotNL = clamp(dot(N, L), 0.0, 1.0);
 
-	// Light color fixed
+    // 光源颜色（此处固定为白色，实际应用中可从光源参数获取）
 	float3 lightColor = float3(1.0, 1.0, 1.0);
 
-	float3 color = float3(0.0, 0.0, 0.0);
+    float3 color = float3(0.0, 0.0, 0.0);
 
-	if (dotNL > 0.0) {
-		// D = Normal distribution (Distribution of the microfacets)
-		float D = D_GGX(dotNH, roughness);
-		// G = Geometric shadowing term (Microfacets shadowing)
-		float G = G_SchlicksmithGGX(dotNL, dotNV, roughness);
-		// F = Fresnel factor (Reflectance depending on angle of incidence)
-		float3 F = F_Schlick(dotNV, F0);
-		float3 spec = D * F * G / (4.0 * dotNL * dotNV + 0.001);
-		float3 kD = (float3(1.0, 1.0, 1.0) - F) * (1.0 - metallic);
-		color += (kD * ALBEDO(inUV) / PI + spec) * dotNL;
+    // 只有当光线朝向表面时才计算光照贡献
+    if (dotNL > 0.0) {
+        // D = 正态分布函数（微平面分布）
+        float D = D_GGX(dotNH, roughness);
+        // G = 几何阴影函数（微平面遮挡）
+        float G = G_SchlicksmithGGX(dotNL, dotNV, roughness);
+        // F = 菲涅尔函数（反射率随角度变化）
+        float3 F = F_Schlick(dotNV, F0);
+        // 计算镜面反射项
+        float3 spec = D * F * G / (4.0 * dotNL * dotNV + 0.001);
+        // 计算漫反射系数：非金属表面才有漫反射
+        float3 kD = (float3(1.0, 1.0, 1.0) - F) * (1.0 - metallic);
+        // 累加光照贡献：漫反射 + 镜面反射
+        color += (kD * (inColor) / PI + spec) * dotNL;
 	}
 
 	return color;
 }
 
+// 计算世界空间中的法向量（考虑法线贴图）
+// 从法线纹理中采样并通过TBN矩阵转换到世界空间
 float3 calculateNormal(VSOutput input)
 {
-    float3 tangentNormal = normalTexture.Sample(input.UV).xyz * 2.0 - 1.0;
+    // 从法线纹理采样并转换范围：[0,1] → [-1,1]
+    float3 tangentNormal = (materialParameters.normalTextureEmpty ? input.Normal : normalTexture.Sample(input.UV).xyz) * 2.0 - 1.0;
 
+    // 构建TBN矩阵（切线-副切线-法线矩阵）
+    // 世界空间法向量
 	float3 N = normalize(input.Normal);
-	float3 T = normalize(input.Tangent);
+    // 世界空间切线向量
+    float3 T = normalize(input.Tangent);
+    // 计算副切线向量
 	float3 B = normalize(cross(N, T));
 	float3x3 TBN = transpose(float3x3(T, B, N));
 
+    // 将切线空间的法线转换到世界空间
 	return normalize(mul(TBN, tangentNormal));
 }
 
@@ -131,48 +167,98 @@ float4 fragmentMain(VSOutput input)
 	float3 N = calculateNormal(input);
 	float3 V = normalize(globalParams.camPos - input.WorldPos);
     float3 R = reflect(-V, N);
-    float metallic = 1, roughness = 1;
-    float2 mr = materialParameters.mergeMetallicRoughnessTexture
-                    ? metallicRoughnessTexture.Sample(input.UV).rg
-                    : float2(metallicTexture.Sample(input.UV).r, roughnessTexture.Sample(input.UV).r);
+    // 初始化默认金属度和粗糙度（1.0为默认值）
+    float metallic = 1.0;
+    float roughness = 1.0;
+
+    float2 mr;
+    if (materialParameters.mergeMetallicRoughnessTexture)
+    {
+        if (materialParameters.metallicRoughnessTextureEmpty)
+        {
+            mr = float2(1.0, 1.0);
+        }
+        else
+        {
+            mr = metallicRoughnessTexture.Sample(input.UV).rg;
+        }
+    }
+    else
+    {
+        float metallicVal = 1.0;
+        float roughnessVal = 1.0;
+
+        if (!materialParameters.metallicTextureEmpty)
+        {
+            metallicVal = metallicTexture.Sample(input.UV).r;
+        }
+        if (!materialParameters.roughnessTextureEmpty)
+        {
+            roughnessVal = roughnessTexture.Sample(input.UV).r;
+        }
+
+        mr = float2(metallicVal, roughnessVal);
+    }
+
+    // 应用材质参数中的因子（最终值 = 纹理采样值 * 材质因子）
     metallic = mr.x * materialParameters.metallicFactor;
     roughness = mr.y * materialParameters.roughnessFactor;
 
-    //float3 srcColor = materialParameters.baseColorTextureEmpty ? input.Color : ALBEDO(input.UV);
-    float3 srcColor = ALBEDO(input.UV);
+    // 确保数值在有效范围内（0.0-1.0），避免异常值影响渲染
+    metallic = clamp(metallic, 0.0, 1.0);
+    roughness = clamp(roughness, 0.0, 1.0);
+
+    float3 srcColor = materialParameters.baseColorTextureEmpty ? input.Color : ALBEDO(input.UV);
     float3 F0 = float3(0.04, 0.04, 0.04);
+    // 计算基础反射率F0
+    // 非金属材质使用0.04的默认值，金属材质使用反照率颜色
     F0 = lerp(F0, srcColor, metallic);
 
+    // 累积直接光照贡献
     float3 Lo = float3(0.0, 0.0, 0.0);
     for (int i = 0; i < lightParameter.activeLightCount; i++) {
-		float3 L = normalize(lightParameter.lights[i].position.xyz - input.WorldPos);
-		Lo += specularContribution(input.UV, L, V, N, F0, metallic, roughness);
+        // 计算光线方向（从像素位置到光源位置）
+        float3 L = normalize(lightParameter.lights[i].position.xyz - input.WorldPos);
+        // 累加每个光源的贡献
+        Lo += specularContribution(srcColor, L, V, N, F0, metallic, roughness);
 	}
 
+    // 采样BRDF查找表，获取环境镜面反射的预计算值
     float2 brdf = samplerBRDFLUT.Sample(float2(max(dot(N, V), 0.0), roughness)).rg;
+
+    // 采样环境反射（根据粗糙度获取不同模糊程度的反射）
     float3 reflection = prefilteredReflection(R, roughness).rgb;
+
+    // 采样环境辐照度（用于环境漫反射）
     float3 irradiance = samplerIrradiance.Sample(N).rgb;
 
-    // Diffuse based on irradiance
+    // 计算环境漫反射贡献
     float3 diffuse = irradiance * srcColor;
 
-	float3 F = F_SchlickR(max(dot(N, V), 0.0), F0, roughness);
+    // 计算环境光的菲涅尔项
+    float3 F = F_SchlickR(max(dot(N, V), 0.0), F0, roughness);
 
-	// Specular reflectance
-	float3 specular = reflection * (F * brdf.x + brdf.y);
+    // 计算环境镜面反射贡献
+    float3 specular = reflection * (F * brdf.x + brdf.y);
 
-	// Ambient part
-	float3 kD = 1.0 - F;
+    // 计算环境光贡献
+    // kD：漫反射系数，金属度越高漫反射越小
+    float3 kD = 1.0 - F;
     kD *= 1.0 - metallic;
-    float3 ambient = (kD * diffuse + specular) * AOTexture.Sample(input.UV).rrr;
+    // 采样AO值（存在则采样，不存在则用默认值1.0）
+    float3 ao = materialParameters.AOTextureEmpty ? float3(1.0, 1.0, 1.0) : AOTexture.Sample(input.UV).rrr;
 
-	float3 color = ambient + Lo;
+    // 计算环境光（使用处理后的AO值）
+    float3 ambient = (kD * diffuse + specular) * ao;
+    // 应用环境光遮蔽(AO)
+    //float3 ambient = (kD * diffuse + specular) * AOTexture.Sample(input.UV).rrr;
 
-	// Tone mapping
-	color = Uncharted2Tonemap(color * globalParams.exposure);
-	color = color * (1.0f / Uncharted2Tonemap((11.2f).xxx));
-	// Gamma correction
-	color = pow(color, (1.0f / globalParams.gamma).xxx);
+    float3 color = ambient + Lo;
+    // 应用色调映射（HDR → LDR转换）
+    color = Uncharted2Tonemap(color * globalParams.exposure);
+    color = color * (1.0f / Uncharted2Tonemap((11.2f).xxx));
+    // 应用伽马校正（线性空间 → sRGB空间）
+    color = pow(color, (1.0f / globalParams.gamma).xxx);
 
 	return float4(color, 1.0);
 }

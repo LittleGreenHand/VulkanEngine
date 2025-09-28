@@ -1,21 +1,21 @@
 // 材质
 struct MaterialParameters
 {
+    float4 baseColorFactor = float4(1.0f);
     float alphaCutoff = 1.0f;
     float metallicFactor = 1.0f;
     float roughnessFactor = 1.0f;
-    float4 baseColorFactor = float4(1.0f);
-    bool baseColorTextureEmpty;
-    bool normalTextureEmpty;
-    bool mergeMetallicRoughnessTexture;
-    bool metallicRoughnessTextureEmpty;
-    bool metallicTextureEmpty;
-    bool roughnessTextureEmpty;
-    bool occlusionTextureEmpty;
-    bool emissiveTextureEmpty;
-    bool AOTextureEmpty;
-    bool diffuseTextureEmpty;
-    bool specularGlossinessTextureEmpty;
+    float baseColorTextureEmpty;
+    float normalTextureEmpty;
+    float mergeMetallicRoughnessTexture;
+    float metallicRoughnessTextureEmpty;
+    float metallicTextureEmpty;
+    float roughnessTextureEmpty;
+    float occlusionTextureEmpty;
+    float emissiveTextureEmpty;
+    float AOTextureEmpty;
+    float diffuseTextureEmpty;
+    float specularGlossinessTextureEmpty;
 };
 [[vk::binding(0, 3)]] ConstantBuffer<MaterialParameters> materialParameters;
 [[vk::binding(1, 3)]] Sampler2D baseColorTexture;

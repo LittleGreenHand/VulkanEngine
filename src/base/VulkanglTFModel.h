@@ -113,23 +113,23 @@ namespace vkglTF
 		vks::VulkanDevice* device = nullptr;
 		enum AlphaMode { ALPHAMODE_OPAQUE, ALPHAMODE_MASK, ALPHAMODE_BLEND };
 		AlphaMode alphaMode = ALPHAMODE_OPAQUE;
-		struct MaterialParameters
+		struct alignas(16) MaterialParameters
 		{
+			glm::vec4 baseColorFactor = glm::vec4(1.0f);
 			float alphaCutoff = 1.0f;
 			float metallicFactor = 1.0f;
 			float roughnessFactor = 1.0f;
-			glm::vec4 baseColorFactor = glm::vec4(1.0f);
-			bool baseColorTextureEmpty = true;
-			bool normalTextureEmpty = true;
-			bool mergeMetallicRoughnessTexture = true;
-			bool metallicRoughnessTextureEmpty = true;
-			bool metallicTextureEmpty = true;
-			bool roughnessTextureEmpty = true;
-			bool occlusionTextureEmpty = true;
-			bool emissiveTextureEmpty = true;
-			bool AOTextureEmpty = true;
-			bool diffuseTextureEmpty = true;
-			bool specularGlossinessTextureEmpty = true;
+			float baseColorTextureEmpty = true;
+			float normalTextureEmpty = true;
+			float mergeMetallicRoughnessTexture = true;
+			float metallicRoughnessTextureEmpty = true;
+			float metallicTextureEmpty = true;
+			float roughnessTextureEmpty = true;
+			float occlusionTextureEmpty = true;
+			float emissiveTextureEmpty = true;
+			float AOTextureEmpty = true;
+			float diffuseTextureEmpty = true;
+			float specularGlossinessTextureEmpty = true;
 		}materialParameters;
 		vks::Buffer MaterialParametersBuffer;
 		vks::Texture* baseColorTexture = nullptr;
