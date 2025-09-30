@@ -24,7 +24,7 @@ VkDescriptorSetLayout vkglTF::MaterialDescriptorSetLayout = VK_NULL_HANDLE;
 VkDescriptorSetLayout vkglTF::MeshDescriptorSetLayout = VK_NULL_HANDLE;
 VkMemoryPropertyFlags vkglTF::memoryPropertyFlags = 0;
 uint32_t vkglTF::descriptorBindingFlags = vkglTF::DescriptorBindingFlags::allTexture;
-
+vks::Texture vkglTF::emptyTexture = {};
 /*
 	We use a custom image loading function with tinyglTF, so we can do custom stuff loading ktx textures
 */
@@ -707,6 +707,10 @@ vks::Texture* vkglTF::Model::getTexture(uint32_t index)
 
 void vkglTF::Model::createEmptyTexture(VkQueue transferQueue)
 {
+	if(emptyTexture.image != VK_NULL_HANDLE)
+	{
+		return;
+	}
 	emptyTexture.device = device;
 	emptyTexture.width = 1;
 	emptyTexture.height = 1;
@@ -827,7 +831,6 @@ vkglTF::Model::~Model()
         delete skin;
     }
 	vkDestroyDescriptorPool(device->logicalDevice, descriptorPool, nullptr);
-	emptyTexture.destroy();
 }
 
 void vkglTF::Model::loadNode(vkglTF::Node *parent, const tinygltf::Node &node, uint32_t nodeIndex, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)

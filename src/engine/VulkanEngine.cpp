@@ -353,14 +353,21 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 			{
 				lights.updateLightBuffer();
 			}
+			ImGui::Separator();
+			ImGui::Separator();
+			ImGui::Text("");
 			for (int i = 0; i < lights.lightData.activeLightCount; i++)
 			{
 				std::string lightName = "光源" + std::to_string(i);
 				if (ImGui::InputFloat3((lightName + "位置").c_str(), (float*)&lights.lightData.lights[i].position, "%.2f") ||
-					ImGui::ColorEdit3((lightName + "颜色").c_str(), (float*)&lights.lightData.lights[i].color))
+					ImGui::ColorEdit3((lightName + "颜色").c_str(), (float*)&lights.lightData.lights[i].color) ||
+					ImGui::SliderFloat((lightName + "范围").c_str(), &lights.lightData.lights[i].range, 0, 256) ||
+					ImGui::SliderInt((lightName + "衰减模式").c_str(), &lights.lightData.lights[i].attenuationMode, 0, 2))
 				{
 					lights.updateLightBuffer();
 				}
+				ImGui::Text("");
+				ImGui::Separator();
 			}
 		}
 		ImGui::Unindent();

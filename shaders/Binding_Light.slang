@@ -1,6 +1,8 @@
 struct LightInfo {
     float4 position;
     float3 color;
+    float range;
+    int attenuationMode;
 };
 struct LightParameters
 {

@@ -31,7 +31,7 @@ float3 Uncharted2Tonemap(float3 x)
 	return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
 }
 
-// 正态分布函数(D)：GGX模型
+// 法线分布函数(D)：GGX模型
 // 描述微平面的朝向分布，决定高光的形状和集中度
 // dotNH: 法向量与半程向量的点积
 // roughness: 粗糙度，值越大表面越粗糙
@@ -85,9 +85,45 @@ float3 prefilteredReflection(float3 R, float roughness)
 	return lerp(a, b, lod - lodf);
 }
 
+// 计算光照衰减
+// 支持三种衰减模式：线性、平方反比、物理衰减
+float calculateAttenuation(float distance, float lightRange, int attenuationMode)
+{
+    // 确保距离不小于0
+    distance = max(distance, 0.0);
+    
+    // 如果距离超过光源范围，衰减为0
+    if (distance > lightRange)
+        return 0.0;
+        
+    switch(attenuationMode)
+    {
+        // 线性衰减：(1 - 距离/范围)
+        case 0:
+            return 1.0 - (distance / lightRange);
+            
+        // 平方反比衰减：1 / (1 + d + d²) - 物理上更准确
+        case 1:
+        {
+            float d = distance / lightRange;
+            return 1.0 / (1.0 + d + d * d);
+        }
+            
+        // 物理衰减：基于真实光照衰减公式，更柔和
+        case 2:
+        default:
+        {
+            float d = distance / lightRange;
+            float d2 = d * d;
+            float d3 = d2 * d;
+            return 1.0 / (1.0 + 2.0 * d + 2.0 * d2 + d3);
+        }
+    }
+}
+
 // 计算镜面反射贡献
 // 综合运用D、G、F函数计算PBR中的直接光照镜面反射部分
-// inColor: fragment颜色
+// albedoColor: fragment颜色
 // lightColor: 光源颜色
 // L: 光线方向
 // V: 观察方向
@@ -95,7 +131,7 @@ float3 prefilteredReflection(float3 R, float roughness)
 // F0: 基础反射率
 // metallic: 金属度
 // roughness: 粗糙度
-float3 specularContribution(float3 inColor, float3 lightColor, float3 L, float3 V, float3 N, float3 F0, float metallic, float roughness)
+float3 specularContribution(float3 albedoColor, float3 lightColor, float3 L, float3 V, float3 N, float3 F0, float metallic, float roughness, float attenuation)
 {
     // 计算半程向量（光线方向与观察方向的中间向量）
 	float3 H = normalize (V + L);
@@ -118,7 +154,7 @@ float3 specularContribution(float3 inColor, float3 lightColor, float3 L, float3 
         // 计算漫反射系数：非金属表面才有漫反射
         float3 kD = (float3(1.0, 1.0, 1.0) - F) * (1.0 - metallic);
         // 累加光照贡献：漫反射 + 镜面反射
-        color += (kD * (inColor) / PI + spec) * dotNL;
+        color += (kD * (albedoColor) / PI + spec) * dotNL * lightColor * attenuation;
 	}
 
 	return color;
@@ -219,24 +255,32 @@ float4 fragmentMain(VSOutput input)
     // 应用材质参数中的因子（最终值 = 纹理采样值 * 材质因子）
     metallic = mr.x * materialParameters.metallicFactor;
     roughness = mr.y * materialParameters.roughnessFactor;
-
     // 确保数值在有效范围内（0.0-1.0），避免异常值影响渲染
     metallic = clamp(metallic, 0.0, 1.0);
     roughness = clamp(roughness, 0.0, 1.0);
 
-    float3 srcColor = materialParameters.baseColorTextureEmpty != 0 ? input.Color : ALBEDO(input.UV);
-    float3 F0 = float3(0.04, 0.04, 0.04);
+    float3 albedoColor = materialParameters.baseColorTextureEmpty != 0 ? input.Color : ALBEDO(input.UV);
+    float3 emission = emissiveTexture.Sample(input.UV).rgb;
+
     // 计算基础反射率F0
     // 非金属材质使用0.04的默认值，金属材质使用反照率颜色
-    F0 = lerp(F0, srcColor, metallic);
+    float3 F0 = float3(0.04, 0.04, 0.04);
+    F0 = lerp(F0, albedoColor, metallic);
 
     // 累积直接光照贡献
     float3 Lo = float3(0.0, 0.0, 0.0);
     for (int i = 0; i < lightParameter.activeLightCount; i++) {
-        // 计算光线方向（从像素位置到光源位置）
-        float3 L = normalize(lightParameter.lights[i].position.xyz - input.WorldPos);
-        // 累加每个光源的贡献
-        Lo += specularContribution(srcColor, lightParameter.lights[i].color, L, V, N, F0, metallic, roughness);
+        // 计算表面点到光源的向量和距离
+        float3 lightDir = lightParameter.lights[i].position.xyz - input.WorldPos;
+        float distance = length(lightDir);
+        float3 L = normalize(lightDir);
+
+        // 计算衰减因子
+        float attenuation = calculateAttenuation(distance, lightParameter.lights[i].range, lightParameter.lights[i].attenuationMode);
+
+        // 累加每个光源的贡献（已包含衰减）
+        Lo += specularContribution(albedoColor, lightParameter.lights[i].color, L, V, N, F0, 
+                                  metallic, roughness, attenuation);
 	}
 
     // 采样BRDF查找表，获取环境镜面反射的预计算值
@@ -249,7 +293,7 @@ float4 fragmentMain(VSOutput input)
     float3 irradiance = samplerIrradiance.Sample(N).rgb;
 
     // 计算环境漫反射贡献
-    float3 diffuse = irradiance * srcColor;
+    float3 diffuse = irradiance * albedoColor;
 
     // 计算环境光的菲涅尔项
     float3 F = F_SchlickR(max(dot(N, V), 0.0), F0, roughness);
@@ -257,19 +301,17 @@ float4 fragmentMain(VSOutput input)
     // 计算环境镜面反射贡献
     float3 specular = reflection * (F * brdf.x + brdf.y);
 
+    //获取环境光遮蔽
+    float3 ao = materialParameters.AOTextureEmpty != 0 ? float3(1.0, 1.0, 1.0) : AOTexture.Sample(input.UV).rrr;
+
     // 计算环境光贡献
     // kD：漫反射系数，金属度越高漫反射越小
     float3 kD = 1.0 - F;
     kD *= 1.0 - metallic;
-    // 采样AO值（存在则采样，不存在则用默认值1.0）
-    float3 ao = materialParameters.AOTextureEmpty != 0 ? float3(1.0, 1.0, 1.0) : AOTexture.Sample(input.UV).rrr;
-
-    // 计算环境光（使用处理后的AO值）
     float3 ambient = (kD * diffuse + specular) * ao;
-    // 应用环境光遮蔽(AO)
-    //float3 ambient = (kD * diffuse + specular) * AOTexture.Sample(input.UV).rrr;
 
-    float3 color = ambient + Lo;
+    float3 color = ambient + Lo + emission;
+
     // 应用色调映射（HDR → LDR转换）
     color = Uncharted2Tonemap(color * globalParams.exposure);
     color = color * (1.0f / Uncharted2Tonemap((11.2f).xxx));

@@ -49,7 +49,12 @@ namespace vkglTF
 	extern VkDescriptorSetLayout MeshDescriptorSetLayout;
 	extern VkMemoryPropertyFlags memoryPropertyFlags;
 	extern uint32_t descriptorBindingFlags;
-
+	extern vks::Texture emptyTexture;
+	static void destroyEmptyTexture() {
+		if(emptyTexture.image == VK_NULL_HANDLE)
+			return;
+		emptyTexture.destroy();
+	}
 	struct Node;
 
 	enum DescriptorBindingFlags {
@@ -367,7 +372,6 @@ namespace vkglTF
 	*/
 	class Model {
 	private:
-		vks::Texture emptyTexture;
 		void createEmptyTexture(VkQueue transferQueue);
 	public:
 		vks::VulkanDevice* device;
