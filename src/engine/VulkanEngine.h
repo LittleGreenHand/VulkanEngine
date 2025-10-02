@@ -18,14 +18,8 @@
 #include "VulkanglTFModel.h"
 #include "PipelineBuilder.h"
 #include "VulkanLights.h"
+#include "types.hpp"
 
-enum GLTFModels {
-	M_Cube,
-	M_Cerberus,
-	M_Sponza,
-	M_Sphere,
-	M_Axis
-};
 class VulkanEngine : public VulkanEngineBase
 {
 public:
@@ -63,13 +57,17 @@ public:
 		float gamma = 2.2f;
 	} globalParam;
 
-	struct {
-		VkPipelineLayout skyboxPipelineLayout{ VK_NULL_HANDLE };
-		VkPipeline skybox{ VK_NULL_HANDLE };
+	struct RenderPassInfo {
+		VkRenderPass renderPass{ VK_NULL_HANDLE };
+		
+	};
+	std::array<RenderPassInfo, RP_Count> renderPasses;
 
-		VkPipelineLayout pbrPipelineLayout{ VK_NULL_HANDLE };
-		VkPipeline pbr{ VK_NULL_HANDLE };
-	} pipelines;
+	struct PipelineInfo{
+		VkPipelineLayout pipelineLayout{ VK_NULL_HANDLE };
+		VkPipeline pipeline{ VK_NULL_HANDLE };
+	};
+	std::array<PipelineInfo, PL_Count> pipelines;
 
 	VkDescriptorSetLayout MaterialDescriptorSetLayout{ VK_NULL_HANDLE };
 	VkDescriptorSetLayout globalParamDescriptorSetLayout{ VK_NULL_HANDLE };
@@ -99,10 +97,6 @@ public:
 	{
 		lights.destroy();
 		if (device) {
-			vkDestroyPipeline(device, pipelines.skybox, nullptr);
-			vkDestroyPipeline(device, pipelines.pbr, nullptr);
-			vkDestroyPipelineLayout(device, pipelines.pbrPipelineLayout, nullptr);
-			vkDestroyPipelineLayout(device, pipelines.skyboxPipelineLayout, nullptr);
 			textures.environmentCube.destroy();
 			textures.irradianceCube.destroy();
 			textures.prefilteredCube.destroy();
@@ -121,6 +115,18 @@ public:
 			vkDestroyDescriptorSetLayout(device, IBLDescriptorLayout, nullptr);
 			vkDestroyDescriptorSetLayout(device, meshDescriptorSetLayout, nullptr);
 			vkDestroyDescriptorSetLayout(device, emptyDescriptorLayout, nullptr);
+			for(auto& pipeline : pipelines)
+			{
+				if(pipeline.pipeline != VK_NULL_HANDLE)
+					vkDestroyPipeline(device, pipeline.pipeline, nullptr);
+				if(pipeline.pipelineLayout != VK_NULL_HANDLE)
+					vkDestroyPipelineLayout(device, pipeline.pipelineLayout, nullptr);
+			}
+			for (auto& pass : renderPasses)
+			{
+				if(pass.renderPass != VK_NULL_HANDLE)
+				vkDestroyRenderPass(device, pass.renderPass, nullptr);
+			}
 		}
 	}
 

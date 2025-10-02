@@ -169,31 +169,31 @@ void VulkanEngine::preparePipelines()
 		PipelineBuilder builder(device);
 		std::vector<VkDescriptorSetLayout> setLayouts;
 		setLayouts.resize(2);
-		setLayouts[vks::LBI_GLOBAL] = globalParamDescriptorSetLayout;
-		setLayouts[vks::LBI_IBL] = IBLDescriptorLayout;
+		setLayouts[LBI_GLOBAL] = globalParamDescriptorSetLayout;
+		setLayouts[LBI_IBL] = IBLDescriptorLayout;
 		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(setLayouts);
-		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines.skyboxPipelineLayout));
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_Skybox].pipelineLayout));
 
 		// Skybox pipeline
 		builder.rasterizationState.cullMode = VK_CULL_MODE_FRONT_BIT;
 		builder.addShaderStage(loadShader(getShadersPath() + "skybox.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
 		builder.addShaderStage(loadShader(getShadersPath() + "skybox.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
-		builder.buildPipeline(renderPass, pipelineCache, pipelines.skyboxPipelineLayout, pipelines.skybox);
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines.skybox, "skybox pipeline");
+		builder.buildPipeline(mainRenderPass, pipelineCache, pipelines[PL_Skybox].pipelineLayout, pipelines[PL_Skybox].pipeline);
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_Skybox].pipeline, "skybox pipeline");
 	}
 
 	// PBR pipeline
 	{
 		PipelineBuilder builder(device);
 		std::vector<VkDescriptorSetLayout> setLayouts;
-		setLayouts.resize(vks::LBI_COUNT);
-		setLayouts[vks::LBI_GLOBAL] = globalParamDescriptorSetLayout;
-		setLayouts[vks::LBI_IBL] = IBLDescriptorLayout;
-		setLayouts[vks::LBI_LIGHTS] = lights.descriptorSetLayout;
-		setLayouts[vks::LBI_MATERIALS] = vkglTF::MaterialDescriptorSetLayout;
-		setLayouts[vks::LBI_CUSTOM] = meshDescriptorSetLayout;
+		setLayouts.resize(LBI_COUNT);
+		setLayouts[LBI_GLOBAL] = globalParamDescriptorSetLayout;
+		setLayouts[LBI_IBL] = IBLDescriptorLayout;
+		setLayouts[LBI_LIGHTS] = lights.descriptorSetLayout;
+		setLayouts[LBI_MATERIALS] = vkglTF::MaterialDescriptorSetLayout;
+		setLayouts[LBI_CUSTOM] = meshDescriptorSetLayout;
 		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(setLayouts);
-		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines.pbrPipelineLayout));
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_PBR].pipelineLayout));
 
 		builder.rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
 		//启用深度测试与写入
@@ -201,8 +201,8 @@ void VulkanEngine::preparePipelines()
 		builder.depthStencilState.depthTestEnable = VK_TRUE;
 		builder.addShaderStage(loadShader(getShadersPath() + "PBRRender.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
 		builder.addShaderStage(loadShader(getShadersPath() + "PBRRender.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
-		builder.buildPipeline(renderPass, pipelineCache, pipelines.pbrPipelineLayout, pipelines.pbr);
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines.pbr, "PBRRender pipeline");
+		builder.buildPipeline(mainRenderPass, pipelineCache, pipelines[PL_PBR].pipelineLayout, pipelines[PL_PBR].pipeline);
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_PBR].pipeline, "PBRRender pipeline");
 	}
 
 	auto tEnd = std::chrono::high_resolution_clock::now();
@@ -256,7 +256,7 @@ void VulkanEngine::buildCommandBuffer()
 	clearValues[2].color = { {0.0f, 0.0f, 0.0f, 0.0f} };
 
 	VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
-	renderPassBeginInfo.renderPass = renderPass;
+	renderPassBeginInfo.renderPass = mainRenderPass;
 	renderPassBeginInfo.renderArea.offset.x = 0;
 	renderPassBeginInfo.renderArea.offset.y = 0;
 	renderPassBeginInfo.renderArea.extent.width = width;
@@ -275,15 +275,15 @@ void VulkanEngine::buildCommandBuffer()
 
 	const int descriptorSetCount = 3;
 	std::vector<VkDescriptorSet> descriptorSetsArray(descriptorSetCount);
-	descriptorSetsArray[vks::LBI_GLOBAL] = frameDescriptorSets[currentBuffer].globalParamDescriptorSet;
-	descriptorSetsArray[vks::LBI_IBL] = IBLDescriptorSet;
-	descriptorSetsArray[vks::LBI_LIGHTS] = lights.descriptorSet;
+	descriptorSetsArray[LBI_GLOBAL] = frameDescriptorSets[currentBuffer].globalParamDescriptorSet;
+	descriptorSetsArray[LBI_IBL] = IBLDescriptorSet;
+	descriptorSetsArray[LBI_LIGHTS] = lights.descriptorSet;
 	// Skybox
 	if (displaySkybox)
 	{
 		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline skybox", { 1.0f, 1.0f, 1.0f });
-		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.skybox);
-		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.skyboxPipelineLayout, 0, 2, descriptorSetsArray.data(), 0, nullptr);
+		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_Skybox].pipeline);
+		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_Skybox].pipelineLayout, 0, 2, descriptorSetsArray.data(), 0, nullptr);
 		skybox.draw(cmdBuffer);//不需要绑定材质描述符集
 		vkUtils::cmdEndLabel(cmdBuffer);
 	}
@@ -291,12 +291,12 @@ void VulkanEngine::buildCommandBuffer()
 	//PBR
 	{
 		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline PBR", { 1.0f, 1.0f, 1.0f });
-		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbr);
-		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbrPipelineLayout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
+		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR].pipeline);
+		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR].pipelineLayout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
 
 		for (auto& [key, model] : models)
 		{
-			model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines.pbrPipelineLayout);
+			model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines[PL_PBR].pipelineLayout);
 		}
 		vkUtils::cmdEndLabel(cmdBuffer);
 	}

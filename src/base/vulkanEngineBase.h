@@ -130,7 +130,7 @@ public:
 	// Command buffers used for rendering
 	std::array<VkCommandBuffer, maxConcurrentFrames> drawCmdBuffers;
 	// Global render pass for frame buffer writes
-	VkRenderPass renderPass{ VK_NULL_HANDLE };
+	VkRenderPass mainRenderPass{ VK_NULL_HANDLE };
 	// List of available frame buffers (same as number of swap chain images)
 	std::vector<VkFramebuffer>frameBuffers;
 	// Descriptor set pool

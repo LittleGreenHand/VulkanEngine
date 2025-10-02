@@ -284,6 +284,8 @@ float4 fragmentMain(VSOutput input)
 	}
 
     // 采样BRDF查找表，获取环境镜面反射的预计算值
+    // LUT 的横轴是dot(N, V)（视角与法线的夹角，反映 “观察方向的倾斜程度”），
+    // 纵轴是粗糙度，存储的是 “BRDF 中除了环境光辐射亮度Li之外的、与材质和视角相关的积分结果”
     float2 brdf = samplerBRDFLUT.Sample(float2(max(dot(N, V), 0.0), roughness)).rg;
 
     // 采样环境反射（根据粗糙度获取不同模糊程度的反射）

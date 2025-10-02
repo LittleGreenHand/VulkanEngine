@@ -233,7 +233,7 @@ void VulkanEngineBase::prepare()
 			loadShader(getShadersPath() + "uioverlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
 		};
 		uiOverlay.prepareResources();
-		uiOverlay.preparePipeline(pipelineCache, renderPass, swapChain.colorFormat, depthFormat);
+		uiOverlay.preparePipeline(pipelineCache, mainRenderPass, swapChain.colorFormat, depthFormat);
 	}
 }
 
@@ -900,9 +900,9 @@ VulkanEngineBase::~VulkanEngineBase()
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 	}
 	destroyCommandBuffers();
-	if (renderPass != VK_NULL_HANDLE)
+	if (mainRenderPass != VK_NULL_HANDLE)
 	{
-		vkDestroyRenderPass(device, renderPass, nullptr);
+		vkDestroyRenderPass(device, mainRenderPass, nullptr);
 	}
 	for (auto& frameBuffer : frameBuffers)
 	{
@@ -3033,7 +3033,7 @@ void VulkanEngineBase::setupFrameBuffer()
 		};
 		VkFramebufferCreateInfo frameBufferCreateInfo{};
 		frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		frameBufferCreateInfo.renderPass = renderPass;
+		frameBufferCreateInfo.renderPass = mainRenderPass;
 		frameBufferCreateInfo.attachmentCount = 2;
 		frameBufferCreateInfo.pAttachments = attachments;
 		frameBufferCreateInfo.width = width;
@@ -3112,7 +3112,7 @@ void VulkanEngineBase::setupRenderPass()
 	renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
 	renderPassInfo.pDependencies = dependencies.data();
 
-	VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass));
+	VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &mainRenderPass));
 }
 
 void VulkanEngineBase::getEnabledFeatures() {}

@@ -15,6 +15,7 @@ struct alignas(16) LightUbo {
 	int activeLightCount = 1;
 };
 
+const uint32_t shadowMapize{ 2048 };
 class VulkanLights
 {
 public:
@@ -25,6 +26,8 @@ public:
 	VkDescriptorPool descriptorPool{ VK_NULL_HANDLE };
 	VkDescriptorSetLayout descriptorSetLayout{ VK_NULL_HANDLE };
 	VkDescriptorSet descriptorSet{ VK_NULL_HANDLE };
+
+	VkRenderPass renderPass{ VK_NULL_HANDLE };//用于生成ShadowMap
 public:
 	~VulkanLights()
 	{
@@ -57,4 +60,6 @@ public:
 	void preperDescriptor(vks::VulkanDevice* vulkanDevice);
 
 	void updateLightBuffer();
+
+	VkRenderPass preperRenderPass(VkFormat depthFormat, bool useDepth = true);
 };

@@ -1565,7 +1565,7 @@ void vkglTF::Model::drawNode(Node *node, VkCommandBuffer commandBuffer, uint32_t
 	if (node->mesh) {
 		//node->mesh->updateUniformBuffer();
 		if (pipelineLayout != VK_NULL_HANDLE)
-			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, vks::LBI_CUSTOM, 1, &node->mesh->uniformBuffer.descriptorSet, 0, nullptr);
+			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, LBI_CUSTOM, 1, &node->mesh->uniformBuffer.descriptorSet, 0, nullptr);
 		for (Primitive* primitive : node->mesh->primitives) {
 			bool skip = false;
 			vkglTF::Material& material = primitive->material;
@@ -1581,7 +1581,7 @@ void vkglTF::Model::drawNode(Node *node, VkCommandBuffer commandBuffer, uint32_t
 			}
 			if (!skip) {
 				if (renderFlags & RenderFlags::BindMaterial) {
-					vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, vks::LBI_MATERIALS, 1, &material.descriptorSet, 0, nullptr);
+					vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, LBI_MATERIALS, 1, &material.descriptorSet, 0, nullptr);
 				}
 				vkCmdDrawIndexed(commandBuffer, primitive->indexCount, 1, primitive->firstIndex, 0, 0);
 			}
