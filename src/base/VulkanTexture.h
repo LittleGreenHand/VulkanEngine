@@ -31,17 +31,18 @@ namespace vks
 class Texture
 {
   public:
-	vks::VulkanDevice *   device;
-	VkImage               image;
-	VkImageLayout         imageLayout;
-	VkDeviceMemory        deviceMemory;
-	VkImageView           view;
-	uint32_t              width, height;
-	uint32_t              mipLevels;
-	uint32_t              layerCount;
-	VkDescriptorImageInfo descriptor;
-	VkSampler             sampler;
-	uint32_t			  index;
+	vks::VulkanDevice *		device;
+	VkImage					image{ VK_NULL_HANDLE };
+	VkImageLayout			imageLayout;
+	VkDeviceMemory			deviceMemory{ VK_NULL_HANDLE };
+	VkImageView				view{ VK_NULL_HANDLE };
+	uint32_t				width, height;
+	VkFormat				format{ VK_FORMAT_UNDEFINED };
+	uint32_t				mipLevels;
+	uint32_t				layerCount;
+	VkDescriptorImageInfo	descriptor;
+	VkSampler				sampler{ VK_NULL_HANDLE };
+	int						index = -1;
 
 	void      updateDescriptor();
 	void      destroy();

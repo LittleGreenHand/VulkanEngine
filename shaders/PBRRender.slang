@@ -11,6 +11,7 @@ struct VSOutput
     float2 UV;
     float3 Tangent;
     float3 Color;
+    float4 ShadowCoord;
 };
 
 #define PI 3.1415926535897932384626433832795
@@ -202,6 +203,13 @@ float3 calculateNormal(VSOutput input)
 [shader("vertex")]
 VSOutput vertexMain(VSInput input)
 {
+    // 偏置矩阵，用于将坐标从[-1, 1]范围（标准化设备坐标 NDC）转换为[0, 1]范围（纹理采样坐标）
+    static const float4x4 biasMat = float4x4(
+    0.5, 0.0, 0.0, 0.5,
+    0.0, 0.5, 0.0, 0.5,
+    0.0, 0.0, 1.0, 0.0,
+    0.0, 0.0, 0.0, 1.0);
+
     VSOutput output;
     float3 locPos = mul(meshInfo.model, float4(input.Pos, 1.0)).xyz;
     output.WorldPos = locPos;
@@ -210,7 +218,9 @@ VSOutput vertexMain(VSInput input)
 	output.UV = input.UV;
     output.Pos = mul(globalParams.projection, mul(globalParams.view, float4(output.WorldPos, 1.0)));
     output.Color = input.Color;
-	return output;
+    // 计算阴影坐标：局部空间 → 世界空间 → 光源空间 → 偏置转换
+    output.ShadowCoord = mul(biasMat, mul(lightParameter.directLight.directLightViewProj, mul(meshInfo.model, float4(input.Pos, 1.0))));
+    return output;
 }
 
 [shader("fragment")]
@@ -267,21 +277,28 @@ float4 fragmentMain(VSOutput input)
     float3 F0 = float3(0.04, 0.04, 0.04);
     F0 = lerp(F0, albedoColor, metallic);
 
-    // 累积直接光照贡献
+    // 累积点光源贡献
     float3 Lo = float3(0.0, 0.0, 0.0);
-    for (int i = 0; i < lightParameter.activeLightCount; i++) {
+    for (int i = 0; i < lightParameter.activePointLightCount; i++) {
         // 计算表面点到光源的向量和距离
-        float3 lightDir = lightParameter.lights[i].position.xyz - input.WorldPos;
+        float3 lightDir = lightParameter.pointLights[i].position.xyz - input.WorldPos;
         float distance = length(lightDir);
         float3 L = normalize(lightDir);
 
         // 计算衰减因子
-        float attenuation = calculateAttenuation(distance, lightParameter.lights[i].range, lightParameter.lights[i].attenuationMode);
+        float attenuation = calculateAttenuation(distance, lightParameter.pointLights[i].range, lightParameter.pointLights[i].attenuationMode);
 
         // 累加每个光源的贡献（已包含衰减）
-        Lo += specularContribution(albedoColor, lightParameter.lights[i].color, L, V, N, F0, 
-                                  metallic, roughness, attenuation);
+        Lo += specularContribution(albedoColor, lightParameter.pointLights[i].color.xyz, L, V, N, F0,  metallic, roughness, attenuation);
 	}
+
+    //累积定向光贡献
+    {
+        float shadow = (lightParameter.directLight.usePCF == 1) ? filterPCF(input.ShadowCoord / input.ShadowCoord.w) : textureProj(input.ShadowCoord / input.ShadowCoord.w, float2(0.0, 0.0));
+        float3 lightDir = lightParameter.directLight.direct.xyz;
+        float3 L = normalize(lightDir);
+        Lo += shadow * specularContribution(albedoColor, lightParameter.directLight.color.xyz, L, V, N, F0, metallic, roughness, 1.0);
+    }
 
     // 采样BRDF查找表，获取环境镜面反射的预计算值
     // LUT 的横轴是dot(N, V)（视角与法线的夹角，反映 “观察方向的倾斜程度”），

@@ -88,11 +88,8 @@ void VulkanEngine::loadAssets()
 
 }
 
-void VulkanEngine::setupDescriptors()
+void VulkanEngine::prepareDescriptors()
 {
-	MaterialDescriptorSetLayout = vkglTF::MaterialDescriptorSetLayout;
-	meshDescriptorSetLayout = vkglTF::MeshDescriptorSetLayout;
-	lights.preperDescriptor(vulkanDevice);
 	// 创建DescriptorPool
 	{
 		std::vector<VkDescriptorPoolSize> poolSizes = {
@@ -107,14 +104,12 @@ void VulkanEngine::setupDescriptors()
 	// 创建DescriptorSetLayout
 	{
 		VkDescriptorSetLayoutCreateInfo descriptorLayoutCI = vks::initializers::descriptorSetLayoutCreateInfo(nullptr, 0);
-		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &emptyDescriptorLayout));
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)emptyDescriptorLayout, "emptyDescriptorLayout");
 
 		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
 			vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0)};
 		descriptorLayoutCI = vks::initializers::descriptorSetLayoutCreateInfo(setLayoutBindings);
-		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &globalParamDescriptorSetLayout));
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)globalParamDescriptorSetLayout, "globalParamDescriptorSetLayout");
+		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &setLayouts[LBI_GLOBAL]));
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)setLayouts[LBI_GLOBAL], "globalParamDescriptorSetLayout");
 
 		setLayoutBindings.clear();
 		setLayoutBindings.push_back(vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0));
@@ -122,8 +117,8 @@ void VulkanEngine::setupDescriptors()
 		setLayoutBindings.push_back(vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 2));
 		setLayoutBindings.push_back(vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 3));
 		descriptorLayoutCI = vks::initializers::descriptorSetLayoutCreateInfo(setLayoutBindings);
-		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &IBLDescriptorLayout));
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)IBLDescriptorLayout, "IBLDescriptorLayout");
+		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &setLayouts[LBI_IBL]));
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)setLayouts[LBI_IBL], "IBLDescriptorLayout");
 	}
 
 	// 创建DescriptorSet
@@ -131,7 +126,7 @@ void VulkanEngine::setupDescriptors()
 		//全局参数
 		for (auto i = 0; i < frameDescriptorSets.size(); i++) {
 			// 分配描述符集
-			VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &globalParamDescriptorSetLayout, 1);
+			VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &setLayouts[LBI_GLOBAL], 1);
 			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &frameDescriptorSets[i].globalParamDescriptorSet));
 			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)frameDescriptorSets[i].globalParamDescriptorSet, "frameDescriptorSets[" + std::to_string(i) + "].globalParamDescriptorSet ");
 
@@ -141,10 +136,15 @@ void VulkanEngine::setupDescriptors()
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
 		}
 
+		//灯光
+		{
+			vkLight::preperDescriptor(vulkanDevice, descriptorPool);
+		}
+
 		//IBL贴图
 		{
 			// 分配描述符集
-			VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &IBLDescriptorLayout, 1);
+			VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &setLayouts[LBI_IBL], 1);
 			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &IBLDescriptorSet));
 			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)IBLDescriptorSet, "IBLDescriptorSet ");
 
@@ -158,6 +158,9 @@ void VulkanEngine::setupDescriptors()
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
 		}
 	}
+	setLayouts[LBI_LIGHTS] = vkLight::descriptorSetLayout;
+	setLayouts[LBI_MATERIALS] = vkglTF::MaterialDescriptorSetLayout;
+	setLayouts[LBI_MESH] = vkglTF::MeshDescriptorSetLayout;
 }
 
 void VulkanEngine::preparePipelines()
@@ -167,11 +170,12 @@ void VulkanEngine::preparePipelines()
 	//skybox pipeline
 	{
 		PipelineBuilder builder(device);
-		std::vector<VkDescriptorSetLayout> setLayouts;
-		setLayouts.resize(2);
-		setLayouts[LBI_GLOBAL] = globalParamDescriptorSetLayout;
-		setLayouts[LBI_IBL] = IBLDescriptorLayout;
-		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(setLayouts);
+
+		std::vector<VkDescriptorSetLayout> setLayoutsVector;
+		setLayoutsVector.resize(2);
+		setLayoutsVector[LBI_GLOBAL] = setLayouts[LBI_GLOBAL];
+		setLayoutsVector[LBI_IBL] = setLayouts[LBI_IBL];
+		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(setLayoutsVector);
 		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_Skybox].pipelineLayout));
 
 		// Skybox pipeline
@@ -185,14 +189,14 @@ void VulkanEngine::preparePipelines()
 	// PBR pipeline
 	{
 		PipelineBuilder builder(device);
-		std::vector<VkDescriptorSetLayout> setLayouts;
-		setLayouts.resize(LBI_COUNT);
-		setLayouts[LBI_GLOBAL] = globalParamDescriptorSetLayout;
-		setLayouts[LBI_IBL] = IBLDescriptorLayout;
-		setLayouts[LBI_LIGHTS] = lights.descriptorSetLayout;
-		setLayouts[LBI_MATERIALS] = vkglTF::MaterialDescriptorSetLayout;
-		setLayouts[LBI_CUSTOM] = meshDescriptorSetLayout;
-		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(setLayouts);
+		std::vector<VkDescriptorSetLayout> setLayoutsVector;
+		setLayoutsVector.resize(5);
+		setLayoutsVector[LBI_GLOBAL] = setLayouts[LBI_GLOBAL];
+		setLayoutsVector[LBI_IBL] = setLayouts[LBI_IBL];
+		setLayoutsVector[LBI_LIGHTS] = setLayouts[LBI_LIGHTS];
+		setLayoutsVector[LBI_MATERIALS] = setLayouts[LBI_MATERIALS];
+		setLayoutsVector[LBI_MESH] = setLayouts[LBI_MESH];
+		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(setLayoutsVector);
 		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_PBR].pipelineLayout));
 
 		builder.rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
@@ -239,8 +243,10 @@ void VulkanEngine::prepare()
 	vkUtils::generateIrradianceCube(textures.irradianceCube, textures.environmentCube);
 	vkUtils::generatePrefilteredCube(textures.prefilteredCube, textures.environmentCube);
 	prepareUniformBuffers();
-	setupDescriptors();
+	prepareDescriptors();
 	preparePipelines();
+	pointLights.prepare(vulkanDevice, VK_FORMAT_D16_UNORM, &renderPasses[RP_PointLight]);
+	directLight.prepare(vulkanDevice, VK_FORMAT_D16_UNORM, &renderPasses[RP_DirectLight]);
 	prepared = true;
 }
 
@@ -249,6 +255,11 @@ void VulkanEngine::buildCommandBuffer()
 	VkCommandBuffer cmdBuffer = drawCmdBuffers[currentBuffer];
 
 	VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+
+	VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
+
+	//绘制阴影贴图
+	directLight.Render(cmdBuffer);
 
 	VkClearValue clearValues[3]{};
 	clearValues[0].color = { { 0.25f, 0.25f, 0.25f, 1.0f } };;
@@ -268,7 +279,6 @@ void VulkanEngine::buildCommandBuffer()
 	const VkViewport viewport = vks::initializers::viewport((float)width, (float)height, 0.0f, 1.0f);
 	const VkRect2D scissor = vks::initializers::rect2D(width, height, 0, 0);
 
-	VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
 	vkCmdBeginRenderPass(cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 	vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
 	vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
@@ -277,7 +287,7 @@ void VulkanEngine::buildCommandBuffer()
 	std::vector<VkDescriptorSet> descriptorSetsArray(descriptorSetCount);
 	descriptorSetsArray[LBI_GLOBAL] = frameDescriptorSets[currentBuffer].globalParamDescriptorSet;
 	descriptorSetsArray[LBI_IBL] = IBLDescriptorSet;
-	descriptorSetsArray[LBI_LIGHTS] = lights.descriptorSet;
+	descriptorSetsArray[LBI_LIGHTS] = vkLight::descriptorSet;
 	// Skybox
 	if (displaySkybox)
 	{
@@ -319,7 +329,7 @@ void VulkanEngine::render()
 
 void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 {
-	if (ImGui::CollapsingHeader("相机"), ImGuiTreeNodeFlags_DefaultOpen) {
+	if (ImGui::CollapsingHeader("相机")) {
 		ImGui::Indent();
 		{
 			ImGui::SliderFloat("移动速度", &camera.movementSpeed, 0.1f, 10);
@@ -337,7 +347,7 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 		}
 		ImGui::Unindent();
 	}
-	if (ImGui::CollapsingHeader("全局设置"), ImGuiTreeNodeFlags_DefaultOpen) {
+	if (ImGui::CollapsingHeader("全局设置")) {
 		ImGui::Indent();
 		{
 			ImGui::InputFloat("曝光", &globalParam.exposure, 0.01f, 0.1f, "%.2f");
@@ -346,28 +356,49 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 		}
 		ImGui::Unindent();
 	}
-	if (ImGui::CollapsingHeader("光源设置"), ImGuiTreeNodeFlags_DefaultOpen) {
+	if (ImGui::CollapsingHeader("光源设置")) {
 		ImGui::Indent();
 		{
-			if(ImGui::SliderInt("光源数量", &lights.lightData.activeLightCount, 0, MAX_LIGHTS))
-			{
-				lights.updateLightBuffer();
-			}
-			ImGui::Separator();
-			ImGui::Separator();
-			ImGui::Text("");
-			for (int i = 0; i < lights.lightData.activeLightCount; i++)
-			{
-				std::string lightName = "光源" + std::to_string(i);
-				if (ImGui::InputFloat3((lightName + "位置").c_str(), (float*)&lights.lightData.lights[i].position, "%.2f") ||
-					ImGui::ColorEdit3((lightName + "颜色").c_str(), (float*)&lights.lightData.lights[i].color) ||
-					ImGui::SliderFloat((lightName + "范围").c_str(), &lights.lightData.lights[i].range, 0, 256) ||
-					ImGui::SliderInt((lightName + "衰减模式").c_str(), &lights.lightData.lights[i].attenuationMode, 0, 2))
+			if (ImGui::CollapsingHeader("太阳光")) {
+				bool PCF = vkLight::lightData.directLight.usePCF;
+				if (ImGui::Checkbox("PCF", &PCF))
 				{
-					lights.updateLightBuffer();
+					vkLight::lightData.directLight.usePCF = PCF;
+					vkLight::updateLightBuffer();
 				}
-				ImGui::Text("");
+				if (ImGui::InputFloat3("太阳方向", (float*)&vkLight::lightData.directLight.direct) ||
+					ImGui::ColorEdit3("太阳光颜色", (float*)&vkLight::lightData.directLight.color)||
+					ImGui::InputFloat("Near", &directLight.zNear)||
+					ImGui::InputFloat("Far", &directLight.zFar)||
+					ImGui::InputFloat("光源距离", &directLight.lightDistance)||
+					ImGui::InputFloat("包围盒边长", &directLight.boundSize)||
+					ImGui::InputFloat("深度偏移", &directLight.depthBiasConstant)||
+					ImGui::InputFloat("深度偏移斜率", &directLight.depthBiasSlope))
+				{
+					directLight.updateVPMatrix();
+				}
+			}
+			if (ImGui::CollapsingHeader("点光源")) {
+				if (ImGui::SliderInt("光源数量", &vkLight::lightData.activePointLightCount, 0, vkLight::MAX_POINTLIGHTS))
+				{
+					vkLight::updateLightBuffer();
+				}
 				ImGui::Separator();
+				ImGui::Separator();
+				ImGui::Text("");
+				for (int i = 0; i < vkLight::lightData.activePointLightCount; i++)
+				{
+					std::string lightName = "光源" + std::to_string(i);
+					if (ImGui::InputFloat3((lightName + "位置").c_str(), (float*)&vkLight::lightData.pointLights[i].position, "%.2f") ||
+						ImGui::ColorEdit3((lightName + "颜色").c_str(), (float*)&vkLight::lightData.pointLights[i].color) ||
+						ImGui::SliderFloat((lightName + "范围").c_str(), &vkLight::lightData.pointLights[i].range, 0, 256) ||
+						ImGui::SliderInt((lightName + "衰减模式").c_str(), &vkLight::lightData.pointLights[i].attenuationMode, 0, 2))
+					{
+						vkLight::updateLightBuffer();
+					}
+					ImGui::Text("");
+					ImGui::Separator();
+				}
 			}
 		}
 		ImGui::Unindent();

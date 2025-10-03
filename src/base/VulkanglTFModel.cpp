@@ -1558,6 +1558,17 @@ void vkglTF::Model::bindBuffers(VkCommandBuffer commandBuffer)
 	buffersBound = true;
 }
 
+void vkglTF::Model::draw(VkCommandBuffer commandBuffer, uint32_t renderFlags, VkPipelineLayout pipelineLayout)
+{
+	if (!buffersBound) {
+		const VkDeviceSize offsets[1] = { 0 };
+		vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer, offsets);
+		vkCmdBindIndexBuffer(commandBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+	}
+	for (auto& node : nodes) {
+		drawNode(node, commandBuffer, renderFlags, pipelineLayout);
+	}
+}
 void vkglTF::Model::drawNode(Node *node, VkCommandBuffer commandBuffer, uint32_t renderFlags, VkPipelineLayout pipelineLayout)
 {
 	if (!node->visible)
@@ -1565,7 +1576,7 @@ void vkglTF::Model::drawNode(Node *node, VkCommandBuffer commandBuffer, uint32_t
 	if (node->mesh) {
 		//node->mesh->updateUniformBuffer();
 		if (pipelineLayout != VK_NULL_HANDLE)
-			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, LBI_CUSTOM, 1, &node->mesh->uniformBuffer.descriptorSet, 0, nullptr);
+			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, LBI_MESH, 1, &node->mesh->uniformBuffer.descriptorSet, 0, nullptr);
 		for (Primitive* primitive : node->mesh->primitives) {
 			bool skip = false;
 			vkglTF::Material& material = primitive->material;
@@ -1592,15 +1603,30 @@ void vkglTF::Model::drawNode(Node *node, VkCommandBuffer commandBuffer, uint32_t
 	}
 }
 
-void vkglTF::Model::draw(VkCommandBuffer commandBuffer, uint32_t renderFlags, VkPipelineLayout pipelineLayout)
+void vkglTF::Model::drawWithPushConstant(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, const glm::mat4& VP, uint32_t renderFlags)
 {
 	if (!buffersBound) {
-		const VkDeviceSize offsets[1] = {0};
+		const VkDeviceSize offsets[1] = { 0 };
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer, offsets);
 		vkCmdBindIndexBuffer(commandBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 	}
 	for (auto& node : nodes) {
-		drawNode(node, commandBuffer, renderFlags, pipelineLayout);
+		drawNodeWithPushConstant(node, commandBuffer, pipelineLayout, VP, renderFlags);
+	}
+}
+void vkglTF::Model::drawNodeWithPushConstant(Node* node, VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, const glm::mat4& VP, uint32_t renderFlags)
+{
+	if (!node->visible)
+		return;
+	if (node->mesh) {
+		//通过推送常量更新MVP矩阵
+		vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &(VP * node->mesh->uniformBlock.modelMatrix)[0]);
+		for (Primitive* primitive : node->mesh->primitives) {
+			vkCmdDrawIndexed(commandBuffer, primitive->indexCount, 1, primitive->firstIndex, 0, 0);
+		}
+	}
+	for (auto& child : node->children) {
+		drawNodeWithPushConstant(child, commandBuffer, pipelineLayout, VP, renderFlags);
 	}
 }
 

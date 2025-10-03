@@ -24,7 +24,8 @@ class VulkanEngine : public VulkanEngineBase
 {
 public:
 	bool displaySkybox = true;
-	VulkanLights lights;
+	vkLight::VulkanPointLights pointLights;
+	vkLight::VulkanDirectLights directLight;
 
 	struct Textures {
 		vks::TextureCubeMap environmentCube;
@@ -43,10 +44,10 @@ public:
 	std::map<GLTFModels, vkglTF::Model> models;
 	vkglTF::Model skybox;
 
-	struct UniformBuffers {
-		vks::Buffer globalParamBuffer;
-	};
-	std::array<UniformBuffers, maxConcurrentFrames> globalParamBuffers;
+	std::array<RenderPassInfo, RP_Count> renderPasses{};
+	std::array<PipelineInfo, PL_Count> pipelines{};
+	std::array<VkDescriptorSetLayout, LBI_COUNT> setLayouts{};
+	VkDescriptorSet IBLDescriptorSet{ VK_NULL_HANDLE };
 
 	struct alignas(16) GlobalParams {
 		glm::mat4 view;
@@ -56,30 +57,15 @@ public:
 		float exposure = 4.5f;
 		float gamma = 2.2f;
 	} globalParam;
-
-	struct RenderPassInfo {
-		VkRenderPass renderPass{ VK_NULL_HANDLE };
-		
+	struct UniformBuffers {
+		vks::Buffer globalParamBuffer;
 	};
-	std::array<RenderPassInfo, RP_Count> renderPasses;
-
-	struct PipelineInfo{
-		VkPipelineLayout pipelineLayout{ VK_NULL_HANDLE };
-		VkPipeline pipeline{ VK_NULL_HANDLE };
-	};
-	std::array<PipelineInfo, PL_Count> pipelines;
-
-	VkDescriptorSetLayout MaterialDescriptorSetLayout{ VK_NULL_HANDLE };
-	VkDescriptorSetLayout globalParamDescriptorSetLayout{ VK_NULL_HANDLE };
-	VkDescriptorSetLayout IBLDescriptorLayout{ VK_NULL_HANDLE };
-	VkDescriptorSetLayout meshDescriptorSetLayout{ VK_NULL_HANDLE };
-	VkDescriptorSet IBLDescriptorSet{ VK_NULL_HANDLE };
+	std::array<UniformBuffers, maxConcurrentFrames> globalParamBuffers;
 	struct Descriptor {
 		VkDescriptorSet globalParamDescriptorSet{ VK_NULL_HANDLE };
 	};
-	VkDescriptorSetLayout emptyDescriptorLayout{ VK_NULL_HANDLE };
-
 	std::array<Descriptor, maxConcurrentFrames> frameDescriptorSets{};
+
 	VkPhysicalDeviceVulkan11Features vulkan11Features{};
 
 	VulkanEngine() : VulkanEngineBase()
@@ -95,7 +81,9 @@ public:
 
 	~VulkanEngine()
 	{
-		lights.destroy();
+		vkLight::destroyLightBuffer();
+		pointLights.destroy();
+		directLight.destroy();
 		if (device) {
 			textures.environmentCube.destroy();
 			textures.irradianceCube.destroy();
@@ -110,11 +98,6 @@ public:
 			for (auto& buffer : globalParamBuffers) {
 				buffer.globalParamBuffer.destroy();
 			}
-			vkDestroyDescriptorSetLayout(device, MaterialDescriptorSetLayout, nullptr);
-			vkDestroyDescriptorSetLayout(device, globalParamDescriptorSetLayout, nullptr);
-			vkDestroyDescriptorSetLayout(device, IBLDescriptorLayout, nullptr);
-			vkDestroyDescriptorSetLayout(device, meshDescriptorSetLayout, nullptr);
-			vkDestroyDescriptorSetLayout(device, emptyDescriptorLayout, nullptr);
 			for(auto& pipeline : pipelines)
 			{
 				if(pipeline.pipeline != VK_NULL_HANDLE)
@@ -124,8 +107,11 @@ public:
 			}
 			for (auto& pass : renderPasses)
 			{
-				if(pass.renderPass != VK_NULL_HANDLE)
-				vkDestroyRenderPass(device, pass.renderPass, nullptr);
+				pass.destroy(device);
+			}
+			for (auto& layout : setLayouts)
+			{
+				vkDestroyDescriptorSetLayout(device, layout, nullptr);
 			}
 		}
 	}
@@ -133,7 +119,7 @@ public:
 	virtual void getEnabledFeatures() override;
 	void buildCommandBuffer();
 	void loadAssets();
-	void setupDescriptors();
+	void prepareDescriptors();
 	void preparePipelines();
 	void prepareUniformBuffers();
 	void updateUniformBuffers();

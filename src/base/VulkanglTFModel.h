@@ -422,6 +422,9 @@ namespace vkglTF
 		void bindBuffers(VkCommandBuffer commandBuffer);
 		void drawNode(Node* node, VkCommandBuffer commandBuffer, uint32_t renderFlags = 0, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE);
 		void draw(VkCommandBuffer commandBuffer, uint32_t renderFlags = 0, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE);
+		//使用推送常量传递MVP矩阵
+		void drawWithPushConstant(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, const glm::mat4& VP, uint32_t renderFlags = 0);
+		void drawNodeWithPushConstant(Node* node, VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, const glm::mat4& VP, uint32_t renderFlags = 0);
 		void getNodeDimensions(Node* node, glm::vec3& min, glm::vec3& max);
 		void getSceneDimensions();
 		void updateAnimation(uint32_t index, float time);

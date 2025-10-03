@@ -19,13 +19,16 @@ namespace vks
 
 	void Texture::destroy()
 	{
-		vkDestroyImageView(device->logicalDevice, view, nullptr);
-		vkDestroyImage(device->logicalDevice, image, nullptr);
+		if(view)
+			vkDestroyImageView(device->logicalDevice, view, nullptr);
+		if(image)
+			vkDestroyImage(device->logicalDevice, image, nullptr);
 		if (sampler)
 		{
 			vkDestroySampler(device->logicalDevice, sampler, nullptr);
 		}
-		vkFreeMemory(device->logicalDevice, deviceMemory, nullptr);
+		if(deviceMemory)
+			vkFreeMemory(device->logicalDevice, deviceMemory, nullptr);
 	}
 
 	ktxResult Texture::loadKTXFile(std::string filename, ktxTexture **target)
@@ -66,6 +69,7 @@ namespace vks
 	*/
 	void Texture2D::loadFromFile(std::string filename, VkFormat format, vks::VulkanDevice *device, VkQueue copyQueue, VkImageUsageFlags imageUsageFlags, VkImageLayout imageLayout, bool forceLinear)
 	{
+		this->format = format;
 		ktxTexture* ktxTexture;
 		ktxResult result = loadKTXFile(filename, &ktxTexture);
 		assert(result == KTX_SUCCESS);
@@ -348,6 +352,7 @@ namespace vks
 	{
 		assert(buffer);
 
+		this->format = format;
 		this->device = device;
 		width = texWidth;
 		height = texHeight;
@@ -508,6 +513,7 @@ namespace vks
 	*/
 	void Texture2DArray::loadFromFile(std::string filename, VkFormat format, vks::VulkanDevice *device, VkQueue copyQueue, VkImageUsageFlags imageUsageFlags, VkImageLayout imageLayout)
 	{
+		this->format = format;
 		ktxTexture* ktxTexture;
 		ktxResult result = loadKTXFile(filename, &ktxTexture);
 		assert(result == KTX_SUCCESS);
@@ -693,6 +699,7 @@ namespace vks
 	*/
 	void TextureCubeMap::loadFromFile(std::string filename, VkFormat format, vks::VulkanDevice *device, VkQueue copyQueue, VkImageUsageFlags imageUsageFlags, VkImageLayout imageLayout, bool flipImage)
 	{
+		this->format = format;
 		ktxTexture* ktxTexture;
 		ktxResult result = loadKTXFile(filename, &ktxTexture);
 		assert(result == KTX_SUCCESS);
