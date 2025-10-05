@@ -47,7 +47,7 @@ void VulkanEngine::loadAssets()
 		models[M_Cerberus].nodes[0]->rotation = vkUtils::eularToQuaternion(glm::vec3(-90, 90, 0));
 		models[M_Cerberus].nodes[0]->translation = (glm::vec3(0.2, -0.15, -0.5));
 		models[M_Cerberus].nodes[0]->scale = (glm::vec3(0.2, 0.2, 0.2));
-		models[M_Cerberus].nodes[0]->update();
+		models[M_Cerberus].nodes[0]->update(); 
 
 		models[M_Cube].loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, queue, glTFLoadingFlags);
 		models[M_Cube].nodes[0]->clearTransform();
@@ -229,6 +229,12 @@ void VulkanEngine::updateUniformBuffers()
 	globalParam.view = camera.matrices.view;
 	globalParam.inverseView = glm::inverse(camera.matrices.view);
 	globalParam.projection = camera.matrices.perspective;
+	//globalParam.projection = glm::ortho(
+	//	-directLight.boundSize, directLight.boundSize,
+	//	-directLight.boundSize, directLight.boundSize,
+	//	directLight.zNear, directLight.zFar     // Z轴范围
+	//);
+	//globalParam.projection[1][1] *= -1.0f;
 	globalParam.camPos = camera.position;
 	
 	memcpy(globalParamBuffers[currentBuffer].globalParamBuffer.mapped, &globalParam, sizeof(GlobalParams));
@@ -336,14 +342,36 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 			ImGui::SliderFloat("旋转速度", &camera.rotationSpeed, 0.1f, 10);
 			ImGui::InputFloat3("位置", (float*)&camera.position);
 			ImGui::InputFloat3("旋转", (float*)&camera.rotation);
-			float fov = camera.fov;
-			float znear = camera.znear;
-			float zfar = camera.zfar;
-			ImGui::InputFloat("FOV", &fov, 0.5f, 5, "%.1f");
-			ImGui::InputFloat("NearPlane", &znear, 1, 100, "%.4f");
-			ImGui::InputFloat("FarPlane", &zfar, 1, 100, "%.1f");
-			if(fov != camera.fov || znear != camera.znear || zfar != camera.zfar)
-				camera.setPerspective(fov, (float)width / (float)height, znear, zfar);
+			if(ImGui::Checkbox("正交视图", &camera.useOrthographic))
+				camera.switchProjectionType();
+			if (camera.useOrthographic)
+			{
+				float left = camera.orthoLeft;
+				float right = camera.orthoRight;
+				float top = camera.orthoTop;
+				float bottom = camera.orthoBottom;
+				float znear = camera.znear;
+				float zfar = camera.zfar;
+				ImGui::InputFloat("Left", &left, 0.5f, 5, "%.1f");
+				ImGui::InputFloat("Right", &right, 0.5f, 5, "%.1f");
+				ImGui::InputFloat("Top", &top, 0.5f, 5, "%.1f");
+				ImGui::InputFloat("Bottom", &bottom, 0.5f, 5, "%.1f");
+				ImGui::InputFloat("NearPlane", &znear, 1, 100, "%.4f");
+				ImGui::InputFloat("FarPlane", &zfar, 1, 100, "%.1f");
+				if (left != camera.orthoLeft || right != camera.orthoRight || bottom != camera.orthoBottom || top != camera.orthoTop || znear != camera.znear || zfar != camera.zfar)
+					camera.setOrthographic(left, right, bottom, top, znear, zfar);
+			}
+			else
+			{
+				float fov = camera.fov;
+				float znear = camera.znear;
+				float zfar = camera.zfar;
+				ImGui::InputFloat("FOV", &fov, 0.5f, 5, "%.1f");
+				ImGui::InputFloat("NearPlane", &znear, 1, 100, "%.4f");
+				ImGui::InputFloat("FarPlane", &zfar, 1, 100, "%.1f");
+				if (fov != camera.fov || znear != camera.znear || zfar != camera.zfar)
+					camera.setPerspective(fov, (float)width / (float)height, znear, zfar);
+			}
 		}
 		ImGui::Unindent();
 	}
@@ -439,7 +467,7 @@ void VulkanEngine::drawNodeTree()
 		ImGui::EndChild();
 
 		ImGui::SameLine(0, 4);
-
+		models[M_Sphere].getSceneDimensions();
 		// 右侧属性面板
 		ImGui::BeginChild("节点属性", ImVec2(550, 800), true);
 		vkUtils::DrawNodePropertiesPanel();

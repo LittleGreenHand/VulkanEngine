@@ -180,6 +180,28 @@ void vkLight::VulkanPointLights::preperRenderPass(bool useDepth)
 
 //-------------------------定向光-------------------------
 
+void vkLight::VulkanDirectLights::updateDimensions()
+{
+	sceneDimensions = vkUtils::GetSceneDimensions();
+	updateVPMatrix();
+}
+
+void vkLight::VulkanDirectLights::updateVPMatrix()
+{
+	// 1. 计算光源视图矩阵（从光源视角看向场景中心）
+	glm::vec3 lightDir = glm::normalize(lightData.directLight.direct);
+	glm::vec3 lightPosition = sceneDimensions.center + lightDir * lightDistance;
+	glm::mat4 ViewMatrix = glm::lookAt(lightPosition, sceneDimensions.center, up);
+
+	glm::mat4 ProjectionMatrix = glm::ortho(-boundSize, boundSize, -boundSize, boundSize, zNear, zFar);
+	ProjectionMatrix[1][1] *= -1.0f;
+
+	VP = ProjectionMatrix * ViewMatrix;
+	lightData.directLight.directLightViewProj[0] = VP;
+
+	updateLightBuffer();
+}
+
 void vkLight::VulkanDirectLights::prepareFramebuffer()
 {
 	renderPass->width = shadowMapize;
@@ -321,7 +343,7 @@ void vkLight::VulkanDirectLights::preperPipeline()
 	VkPushConstantRange pushConstantRange{};
 	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	pushConstantRange.offset = 0;
-	pushConstantRange.size = sizeof(DirectLightInfo);
+	pushConstantRange.size = sizeof(glm::mat4);
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo();
 	pipelineLayoutCreateInfo.setLayoutCount = 0;
 	pipelineLayoutCreateInfo.pSetLayouts = nullptr;
@@ -332,11 +354,11 @@ void vkLight::VulkanDirectLights::preperPipeline()
 	PipelineBuilder builder(device);
 	// 启用深度测试和写入，仅当前像素深度值“小于或等于”深度缓冲区中已存值时，通过测试
 	builder.setDepthStencilState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
-	builder.addShaderStage(vkUtils::vkEngine->loadShader(vkUtils::vkEngine->getShadersPath() + "shadowMapGenerate_directLight.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
+	builder.addShaderStage(vkUtils::vkEngine->loadShader(vkUtils::vkEngine->getShadersPath() + "light_direct.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
 	builder.colorBlendState.attachmentCount = 0;
 	builder.rasterizationState.cullMode = VK_CULL_MODE_NONE;
 	builder.rasterizationState.depthBiasEnable = VK_TRUE;
-	builder.dynamicStateEnables.push_back(VK_DYNAMIC_STATE_DEPTH_BIAS); //向动态状态添加深度偏差，这样我们就能在运行时对其进行更改
+	builder.dynamicStateEnables.push_back(VK_DYNAMIC_STATE_DEPTH_BIAS); //向动态状态添加深度偏移，这样我们就能在运行时对其进行更改
 	builder.dynamicState = vks::initializers::pipelineDynamicStateCreateInfo(builder.dynamicStateEnables);
 	builder.buildPipeline(renderPass->renderPass, vkUtils::vkEngine->pipelineCache, pipelineLayout, pipeline);
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipeline, "DirectLightShadowMapGenerate pipeline");
@@ -370,6 +392,7 @@ void vkLight::VulkanDirectLights::Render(VkCommandBuffer cmdBuffer)
 
 		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline DirectLightShadow", { 1.0f, 1.0f, 1.0f });
+		updateDimensions();
 		for (auto& [key, model] : vkUtils::vkEngine->models)
 		{
 			model.drawWithPushConstant(cmdBuffer,pipelineLayout, VP);

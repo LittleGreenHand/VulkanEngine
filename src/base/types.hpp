@@ -1,6 +1,7 @@
 #pragma once
 #include <vulkan/vulkan.h>
 #include "VulkanTexture.h"
+#include <glm/glm.hpp>
 
 //不同类型的描述符的set编号
 enum LayoutBindIndex {
@@ -57,4 +58,12 @@ enum PipelinesIndex {
 	PL_Skybox = 0,
 	PL_PBR,
 	PL_Count
+};
+
+struct Dimensions {
+	glm::vec3 min = glm::vec3(FLT_MAX);
+	glm::vec3 max = glm::vec3(-FLT_MAX);
+	glm::vec3 size;
+	glm::vec3 center;
+	float radius;
 };

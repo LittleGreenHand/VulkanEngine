@@ -219,7 +219,7 @@ VSOutput vertexMain(VSInput input)
     output.Pos = mul(globalParams.projection, mul(globalParams.view, float4(output.WorldPos, 1.0)));
     output.Color = input.Color;
     // 计算阴影坐标：局部空间 → 世界空间 → 光源空间 → 偏置转换
-    output.ShadowCoord = mul(biasMat, mul(lightParameter.directLight.directLightViewProj, mul(meshInfo.model, float4(input.Pos, 1.0))));
+    output.ShadowCoord = mul(biasMat, mul(lightParameter.directLight.directLightViewProj[0], mul(meshInfo.model, float4(input.Pos, 1.0))));
     return output;
 }
 

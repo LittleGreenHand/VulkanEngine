@@ -7,7 +7,8 @@ struct PointLightInfo {
 struct DirectLightInfo {
     float4 direct;
     float4 color;
-    float4x4 directLightViewProj;
+    float4x4 directLightViewProj[8];
+    int cascadeCount;
     int usePCF;
 };
 struct LightParameters

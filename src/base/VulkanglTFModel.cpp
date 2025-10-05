@@ -17,7 +17,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define TINYGLTF_NO_STB_IMAGE_WRITE
 #include <array>
-#include "types.hpp"
 #include "VulkanglTFModel.h"
 
 VkDescriptorSetLayout vkglTF::MaterialDescriptorSetLayout = VK_NULL_HANDLE;
@@ -1393,6 +1392,8 @@ void vkglTF::Model::loadFromFile(std::string filename, vks::VulkanDevice *device
 			if (node->mesh) {
 				const glm::mat4 localMatrix = node->getWorldMatrix();
 				for (Primitive* primitive : node->mesh->primitives) {
+					glm::vec3 min = glm::vec3(FLT_MAX);
+					glm::vec3 max = glm::vec3(-FLT_MAX);
 					for (uint32_t i = 0; i < primitive->vertexCount; i++) {
 						Vertex& vertex = vertexBuffer[primitive->firstVertex + i];
 						// Pre-transform vertex positions by node-hierarchy
@@ -1409,6 +1410,20 @@ void vkglTF::Model::loadFromFile(std::string filename, vks::VulkanDevice *device
 						if (preMultiplyColor) {
 							vertex.color = primitive->material.materialParameters.baseColorFactor * vertex.color;
 						}
+						if(preTransform || flipY)
+						{
+
+							if (vertex.pos.x < min.x) { min.x = vertex.pos.x; }
+							if (vertex.pos.y < min.y) { min.y = vertex.pos.y; }
+							if (vertex.pos.z < min.z) { min.z = vertex.pos.z; }
+							if (vertex.pos.x > max.x) { max.x = vertex.pos.x; }
+							if (vertex.pos.y > max.y) { max.y = vertex.pos.y; }
+							if (vertex.pos.z > max.z) { max.z = vertex.pos.z; }
+						}
+					}
+					if (preTransform || flipY)
+					{
+						primitive->setDimensions(min, max);
 					}
 				}
 			}
@@ -1632,10 +1647,12 @@ void vkglTF::Model::drawNodeWithPushConstant(Node* node, VkCommandBuffer command
 
 void vkglTF::Model::getNodeDimensions(Node *node, glm::vec3 &min, glm::vec3 &max)
 {
+	if (!node->visible)
+		return;
 	if (node->mesh) {
 		for (Primitive *primitive : node->mesh->primitives) {
-			glm::vec4 locMin = glm::vec4(primitive->dimensions.min, 1.0f) * node->getWorldMatrix();
-			glm::vec4 locMax = glm::vec4(primitive->dimensions.max, 1.0f) * node->getWorldMatrix();
+			glm::vec4 locMin =node->getWorldMatrix()  * glm::vec4(primitive->dimensions.min, 1.0f);
+			glm::vec4 locMax =node->getWorldMatrix() *  glm::vec4(primitive->dimensions.max, 1.0f);
 			if (locMin.x < min.x) { min.x = locMin.x; }
 			if (locMin.y < min.y) { min.y = locMin.y; }
 			if (locMin.z < min.z) { min.z = locMin.z; }

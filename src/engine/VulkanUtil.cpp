@@ -1304,3 +1304,24 @@ void vkUtils::DrawNodePropertiesPanel()
 		selectedNode = nullptr;
 	}
 }
+
+Dimensions vkUtils::GetSceneDimensions()
+{
+	Dimensions dimension;
+	dimension.min = glm::vec3(FLT_MAX);
+	dimension.max = glm::vec3(-FLT_MAX);
+	for (auto& [key, model] : vkEngine->models)
+	{
+		model.getSceneDimensions();
+		if (dimension.min.x > model.dimensions.min.x) { dimension.min.x = model.dimensions.min.x; }
+		if (dimension.min.y > model.dimensions.min.y) { dimension.min.y = model.dimensions.min.y; }
+		if (dimension.min.z > model.dimensions.min.z) { dimension.min.z = model.dimensions.min.z; }
+		if (dimension.max.x < model.dimensions.max.x) { dimension.max.x = model.dimensions.max.x; }
+		if (dimension.max.y < model.dimensions.max.y) { dimension.max.y = model.dimensions.max.y; }
+		if (dimension.max.z < model.dimensions.max.z) { dimension.max.z = model.dimensions.max.z; }
+	}
+	dimension.size = dimension.max - dimension.min;
+	dimension.center = (dimension.min + dimension.max) / 2.0f;
+	dimension.radius = glm::distance(dimension.min, dimension.max) / 2.0f;
+	return dimension;
+}

@@ -39,7 +39,6 @@ public:
 	static void InitModelsSourceDebugName(std::map<GLTFModels, vkglTF::Model>& models);
 public:
 	//PBR生成相关
-
 	static void generateBRDFLUT(vks::Texture2D& lutBrdf);
 	static void generateIrradianceCube(vks::TextureCubeMap& irradianceCube, vks::TextureCubeMap& environmentCube);
 	static void generatePrefilteredCube(vks::TextureCubeMap& prefilteredCube, vks::TextureCubeMap& environmentCube);
@@ -54,4 +53,7 @@ public:
 	static void DrawNodeTree(vkglTF::Node* node, int &nodeId);
 	static void DrawNodePropertiesPanel();
 
+public:
+	//计算并获取场景包围盒
+	static Dimensions GetSceneDimensions();
 };

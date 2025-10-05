@@ -16,7 +16,8 @@ namespace vkLight
 	struct alignas(16) DirectLightInfo {
 		glm::vec4 direct = glm::vec4(0.f, 1.0f, 1.0f, 0.f);
 		glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 0.f);
-		glm::mat4 directLightViewProj;
+		glm::mat4 directLightViewProj[8];
+		int cascadeCount;
 		int usePCF = 0;
 	};
 	const uint32_t MAX_POINTLIGHTS = 16;
@@ -108,6 +109,7 @@ namespace vkLight
 		float lightDistance = 45.0f;
 		//场景包围盒边长，值越小，阴影越清晰
 		float boundSize = 10.0f;
+		Dimensions sceneDimensions;
 
 		RenderPassInfo* renderPass = nullptr;//此pass用于生成ShadowMap
 		VkFormat shadowMapFormat{ VK_FORMAT_D16_UNORM };//ShadowMap的格式
@@ -128,15 +130,8 @@ namespace vkLight
 			}
 			renderPass = nullptr;
 		}
-		void updateVPMatrix()
-		{
-			glm::mat4 depthProjectionMatrix = glm::ortho(-boundSize, boundSize, -boundSize, boundSize, zNear, zFar);
-			depthProjectionMatrix[1][1] *= -1.0f;
-			glm::vec3 normalizeDirect = glm::vec3(glm::normalize(lightData.directLight.direct));
-			glm::mat4 depthViewMatrix = glm::lookAt(normalizeDirect * lightDistance, center, up);
-			lightData.directLight.directLightViewProj = VP = depthProjectionMatrix * depthViewMatrix;
-			updateLightBuffer();
-		}
+		void updateDimensions();
+		void updateVPMatrix();
 
 		void prepare(vks::VulkanDevice* vulkanDevice, VkFormat depthFormat, RenderPassInfo* renderPass)
 		{

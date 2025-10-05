@@ -23,6 +23,8 @@
 #include "vulkan/vulkan.h"
 #include "VulkanDevice.h"
 #include "VulkanTexture.h"
+#include "types.hpp"
+
 
 #include <ktx.h>
 #include <ktxvulkan.h>
@@ -398,13 +400,7 @@ namespace vkglTF
 		std::vector<Material> materials;
 		std::vector<Animation> animations;
 
-		struct Dimensions {
-			glm::vec3 min = glm::vec3(FLT_MAX);
-			glm::vec3 max = glm::vec3(-FLT_MAX);
-			glm::vec3 size;
-			glm::vec3 center;
-			float radius;
-		} dimensions;
+		Dimensions dimensions;
 
 		bool metallicRoughnessWorkflow = true;
 		bool buffersBound = false;

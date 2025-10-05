@@ -8,249 +8,238 @@ class Camera
 {
 private:
 
-	void updateViewMatrix()
-	{
-		glm::mat4 currentMatrix = matrices.view;
+    void updateViewMatrix()
+    {
+        glm::mat4 currentMatrix = matrices.view;
 
-		glm::mat4 rotM = glm::mat4(1.0f);
-		glm::mat4 transM;
+        glm::mat4 rotM = glm::mat4(1.0f);
+        glm::mat4 transM;
 
-		rotM = glm::rotate(rotM, glm::radians(rotation.x * (flipY ? -1.0f : 1.0f)), glm::vec3(1.0f, 0.0f, 0.0f));
-		rotM = glm::rotate(rotM, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-		rotM = glm::rotate(rotM, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+        rotM = glm::rotate(rotM, glm::radians(rotation.x * (flipY ? -1.0f : 1.0f)), glm::vec3(1.0f, 0.0f, 0.0f));
+        rotM = glm::rotate(rotM, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        rotM = glm::rotate(rotM, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
 
-		glm::vec3 translation = position;
-		translation.x *= -1.0f;
-		translation.z *= -1.0f;
-		if (flipY) {
-			translation.y *= -1.0f;
-		}
-		transM = glm::translate(glm::mat4(1.0f), translation);
+        glm::vec3 translation = position;
+        translation.x *= -1.0f;
+        translation.z *= -1.0f;
+        if (flipY) {
+            translation.y *= -1.0f;
+        }
+        transM = glm::translate(glm::mat4(1.0f), translation);
 
-		if (type == CameraType::firstperson)
-		{
-			matrices.view = rotM * transM;
-		}
-		else
-		{
-			matrices.view = transM * rotM;
-		}
+        if (type == CameraType::firstperson)
+        {
+            matrices.view = rotM * transM;
+        }
+        else
+        {
+            matrices.view = transM * rotM;
+        }
 
-		viewPos = glm::vec4(translation, 1.0f)/* * glm::vec4(-1.0f, 1.0f, -1.0f, 1.0f)*/;
+        viewPos = glm::vec4(translation, 1.0f);
 
-		if (matrices.view != currentMatrix) {
-			updated = true;
-		}
-	};
+        if (matrices.view != currentMatrix) {
+            updated = true;
+        }
+    };
 public:
-	enum CameraType { lookat, firstperson };
-	CameraType type = CameraType::lookat;
+    enum CameraType { lookat, firstperson };
+    CameraType type = CameraType::lookat;
 
-	glm::vec3 rotation = glm::vec3();
-	glm::vec3 position = glm::vec3();
-	glm::vec4 viewPos = glm::vec4();
-	glm::vec3 camFront = glm::vec3();
-	glm::vec3 camRight = glm::vec3();
-	glm::vec3 camUp = glm::vec3();
-	float fov;
-	float znear, zfar;
+    glm::vec3 rotation = glm::vec3();
+    glm::vec3 position = glm::vec3();
+    glm::vec4 viewPos = glm::vec4();
+    glm::vec3 camFront = glm::vec3();
+    glm::vec3 camRight = glm::vec3();
+    glm::vec3 camUp = glm::vec3();
+    float fov;
+    float znear, zfar;
+    float aspect = 1;
 
-	float rotationSpeed = 1.0f;
-	float movementSpeed = 1.0f;
+    float rotationSpeed = 1.0f;
+    float movementSpeed = 1.0f;
 
-	bool updated = true;
-	bool flipY = true;
+    bool updated = true;
+    bool flipY = true;
 
-	struct
-	{
-		glm::mat4 perspective;
-		glm::mat4 view;
-	} matrices;
+    struct
+    {
+        glm::mat4 perspective;  // 也用于存储正交投影矩阵
+        glm::mat4 view;
+    } matrices;
 
-	struct
-	{
-		bool left = false;		// key A
-		bool right = false;		// key D
-		bool up = false;		// key W
-		bool down = false;		// key S
-		bool top = false;		// key Q
-		bool bottom = false;	// key E
-	} keys;
+    // 正交投影参数
+    float orthoLeft = -10, orthoRight = 10;
+    float orthoBottom = -10, orthoTop = 10;
+    bool useOrthographic = false;  // 标识当前是否使用正交投影
 
-	bool moving() const
-	{
-		return keys.left || keys.right || keys.up || keys.down || keys.top || keys.bottom;
-	}
+    struct
+    {
+        bool left = false;		// key A
+        bool right = false;		// key D
+        bool up = false;		// key W
+        bool down = false;		// key S
+        bool top = false;		// key Q
+        bool bottom = false;	// key E
+    } keys;
 
-	float getNearClip() const {
-		return znear;
-	}
+    bool moving() const
+    {
+        return keys.left || keys.right || keys.up || keys.down || keys.top || keys.bottom;
+    }
 
-	float getFarClip() const {
-		return zfar;
-	}
+    float getNearClip() const {
+        return znear;
+    }
 
-	void setPerspective(float fov, float aspect, float znear, float zfar)
-	{
-		glm::mat4 currentMatrix = matrices.perspective;
-		this->fov = fov;
-		this->znear = znear;
-		this->zfar = zfar;
-		matrices.perspective = glm::perspective(glm::radians(fov), aspect, znear, zfar);
-		if (flipY) {
-			matrices.perspective[1][1] *= -1.0f;
-		}
-		if (matrices.view != currentMatrix) {
-			updated = true;
-		}
-	};
+    float getFarClip() const {
+        return zfar;
+    }
 
-	void updateAspectRatio(float aspect)
-	{
-		glm::mat4 currentMatrix = matrices.perspective;
-		matrices.perspective = glm::perspective(glm::radians(fov), aspect, znear, zfar);
-		if (flipY) {
-			matrices.perspective[1][1] *= -1.0f;
-		}
-		if (matrices.view != currentMatrix) {
-			updated = true;
-		}
-	}
+    void setPerspective(float fov, float aspect, float znear, float zfar)
+    {
+        this->aspect = aspect;
+        useOrthographic = false;
+        glm::mat4 currentMatrix = matrices.perspective;
+        this->fov = fov;
+        this->znear = znear;
+        this->zfar = zfar;
+        matrices.perspective = glm::perspective(glm::radians(fov), aspect, znear, zfar);
+        if (flipY) {
+            matrices.perspective[1][1] *= -1.0f;
+        }
+        if (matrices.perspective != currentMatrix) {
+            updated = true;
+        }
+    };
 
-	void setPosition(glm::vec3 position)
-	{
-		this->position = position;
-		updateViewMatrix();
-	}
+    // 添加正交投影设置方法
+    void setOrthographic(float left, float right, float bottom, float top, float znear, float zfar)
+    {
+        useOrthographic = true;
+        glm::mat4 currentMatrix = matrices.perspective;
 
-	void setRotation(glm::vec3 rotation)
-	{
-		this->rotation = rotation;
-		updateViewMatrix();
-	}
+        // 保存正交投影参数
+        this->orthoLeft = left;
+        this->orthoRight = right;
+        this->orthoBottom = bottom;
+        this->orthoTop = top;
+        this->znear = znear;
+        this->zfar = zfar;
 
-	void rotate(glm::vec3 delta)
-	{
-		this->rotation += delta;
-		updateViewMatrix();
-	}
+        // 计算正交投影矩阵
+        matrices.perspective = glm::ortho(left, right, bottom, top, znear, zfar);
+        if (flipY) {
+            matrices.perspective[1][1] *= -1.0f;
+        }
 
-	void setTranslation(glm::vec3 translation)
-	{
-		this->position = translation;
-		updateViewMatrix();
-	};
+        if (matrices.perspective != currentMatrix) {
+            updated = true;
+        }
+    }
 
-	void translate(glm::vec3 delta)
-	{
-		this->position += delta;
-		updateViewMatrix();
-	}
+    void updateAspectRatio(float aspect)
+    {
+        glm::mat4 currentMatrix = matrices.perspective;
+		this->aspect = aspect;
+        if (useOrthographic) {
+            matrices.perspective = glm::ortho(orthoLeft, orthoRight, orthoBottom, orthoTop, znear, zfar);
+        }
+        else {
+            // 透视投影的处理保持不变
+            matrices.perspective = glm::perspective(glm::radians(fov), aspect, znear, zfar);
+        }
 
-	void setRotationSpeed(float rotationSpeed)
-	{
-		this->rotationSpeed = rotationSpeed;
-	}
+        if (flipY) {
+            matrices.perspective[1][1] *= -1.0f;
+        }
 
-	void setMovementSpeed(float movementSpeed)
-	{
-		this->movementSpeed = movementSpeed;
-	}
+        if (matrices.perspective != currentMatrix) {
+            updated = true;
+        }
+    }
 
-	void update(float deltaTime)
-	{
-		updated = false;
-		if (type == CameraType::firstperson)
-		{
-			if (moving())
-			{
-				camFront.x = -cos(glm::radians(rotation.x * (flipY ? -1.0f : 1.0f))) * sin(glm::radians(rotation.y));
-				camFront.y = sin(glm::radians(rotation.x * (flipY ? -1.0f : 1.0f)));
-				camFront.z = cos(glm::radians(rotation.x * (flipY ? -1.0f : 1.0f))) * cos(glm::radians(rotation.y));
-				camFront = glm::normalize(camFront);
-				camRight = glm::normalize(glm::cross(camFront, glm::vec3(0.0f, 1.0f, 0.0f)));
-				camUp = glm::normalize(glm::cross(camFront, camRight));
+    // 切换投影类型的方法
+    void switchProjectionType()
+    {
+        if (useOrthographic) {
+            setOrthographic(orthoLeft, orthoRight, orthoBottom, orthoTop, znear, zfar);
+        }
+        else {
+            setPerspective(fov, aspect, znear, zfar);
+        }
+    }
 
-				float moveSpeed = deltaTime * movementSpeed;
-				if (keys.up)
-					position -= camFront * moveSpeed;
-				if (keys.down)
-					position += camFront * moveSpeed;
-				if (keys.left)
-					position += camRight * moveSpeed;
-				if (keys.right)
-					position -= camRight * moveSpeed;
-				if (keys.top)
-					position -= camUp * moveSpeed;
-				if (keys.bottom)
-					position += camUp * moveSpeed;
-			}
-		}
-		updateViewMatrix();
-	};
+    void setPosition(glm::vec3 position)
+    {
+        this->position = position;
+        updateViewMatrix();
+    }
 
-	// Update camera passing separate axis data (gamepad)
-	// Returns true if view or position has been changed
-	bool updatePad(glm::vec2 axisLeft, glm::vec2 axisRight, float deltaTime)
-	{
-		bool retVal = false;
+    void setRotation(glm::vec3 rotation)
+    {
+        this->rotation = rotation;
+        updateViewMatrix();
+    }
 
-		if (type == CameraType::firstperson)
-		{
-			// Use the common console thumbstick layout		
-			// Left = view, right = move
+    void rotate(glm::vec3 delta)
+    {
+        this->rotation += delta;
+        updateViewMatrix();
+    }
 
-			const float deadZone = 0.0015f;
-			const float range = 1.0f - deadZone;
+    void setTranslation(glm::vec3 translation)
+    {
+        this->position = translation;
+        updateViewMatrix();
+    };
 
-			glm::vec3 camFront;
-			camFront.x = -cos(glm::radians(rotation.x)) * sin(glm::radians(rotation.y));
-			camFront.y = sin(glm::radians(rotation.x));
-			camFront.z = cos(glm::radians(rotation.x)) * cos(glm::radians(rotation.y));
-			camFront = glm::normalize(camFront);
+    void translate(glm::vec3 delta)
+    {
+        this->position += delta;
+        updateViewMatrix();
+    }
 
-			float moveSpeed = deltaTime * movementSpeed * 2.0f;
-			float rotSpeed = deltaTime * rotationSpeed * 50.0f;
-			 
-			// Move
-			if (fabsf(axisLeft.y) > deadZone)
-			{
-				float pos = (fabsf(axisLeft.y) - deadZone) / range;
-				position -= camFront * pos * ((axisLeft.y < 0.0f) ? -1.0f : 1.0f) * moveSpeed;
-				retVal = true;
-			}
-			if (fabsf(axisLeft.x) > deadZone)
-			{
-				float pos = (fabsf(axisLeft.x) - deadZone) / range;
-				position += glm::normalize(glm::cross(camFront, glm::vec3(0.0f, 1.0f, 0.0f))) * pos * ((axisLeft.x < 0.0f) ? -1.0f : 1.0f) * moveSpeed;
-				retVal = true;
-			}
+    void setRotationSpeed(float rotationSpeed)
+    {
+        this->rotationSpeed = rotationSpeed;
+    }
 
-			// Rotate
-			if (fabsf(axisRight.x) > deadZone)
-			{
-				float pos = (fabsf(axisRight.x) - deadZone) / range;
-				rotation.y += pos * ((axisRight.x < 0.0f) ? -1.0f : 1.0f) * rotSpeed;
-				retVal = true;
-			}
-			if (fabsf(axisRight.y) > deadZone)
-			{
-				float pos = (fabsf(axisRight.y) - deadZone) / range;
-				rotation.x -= pos * ((axisRight.y < 0.0f) ? -1.0f : 1.0f) * rotSpeed;
-				retVal = true;
-			}
-		}
-		else
-		{
-			// todo: move code from example base class for look-at
-		}
+    void setMovementSpeed(float movementSpeed)
+    {
+        this->movementSpeed = movementSpeed;
+    }
 
-		if (retVal)
-		{
-			updateViewMatrix();
-		}
+    void update(float deltaTime)
+    {
+        updated = false;
+        if (type == CameraType::firstperson)
+        {
+            if (moving())
+            {
+                camFront.x = -cos(glm::radians(rotation.x * (flipY ? -1.0f : 1.0f))) * sin(glm::radians(rotation.y));
+                camFront.y = sin(glm::radians(rotation.x * (flipY ? -1.0f : 1.0f)));
+                camFront.z = cos(glm::radians(rotation.x * (flipY ? -1.0f : 1.0f))) * cos(glm::radians(rotation.y));
+                camFront = glm::normalize(camFront);
+                camRight = glm::normalize(glm::cross(camFront, glm::vec3(0.0f, 1.0f, 0.0f)));
+                camUp = glm::normalize(glm::cross(camFront, camRight));
 
-		return retVal;
-	}
+                float moveSpeed = deltaTime * movementSpeed;
+                if (keys.up)
+                    position -= camFront * moveSpeed;
+                if (keys.down)
+                    position += camFront * moveSpeed;
+                if (keys.left)
+                    position += camRight * moveSpeed;
+                if (keys.right)
+                    position -= camRight * moveSpeed;
+                if (keys.top)
+                    position -= camUp * moveSpeed;
+                if (keys.bottom)
+                    position += camUp * moveSpeed;
+            }
+        }
+        updateViewMatrix();
+    };
 
 };

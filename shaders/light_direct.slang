@@ -7,8 +7,7 @@ struct PushConstants {
     float4x4 MVP;
 };
 [[vk::push_constant]] ConstantBuffer<PushConstants> pushConstants;
-// slang 会自动将entry-point parameters绑定到推送常量
-// 参数VP是视图投影矩阵
+
 [shader("vertex")]
 float4 vertexMain(float3 Pos) : SV_POSITION
 {

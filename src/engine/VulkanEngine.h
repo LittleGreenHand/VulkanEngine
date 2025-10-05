@@ -72,8 +72,9 @@ public:
 	{
 		title = "VulkanEngine";
 		camera.type = Camera::CameraType::firstperson;
-		camera.movementSpeed = 1.0f;
+		camera.movementSpeed = 8.0f;
 		camera.setPerspective(60.0f, (float)width / (float)height, 0.01f, 256.0f);
+
 		camera.rotationSpeed = 0.25f;
 		camera.setRotation({ 0.0f, 0.0f, 0.0f });
 		camera.setPosition({ 0.f, 0.f, 0.f });
