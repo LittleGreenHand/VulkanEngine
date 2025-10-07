@@ -229,12 +229,6 @@ void VulkanEngine::updateUniformBuffers()
 	globalParam.view = camera.matrices.view;
 	globalParam.inverseView = glm::inverse(camera.matrices.view);
 	globalParam.projection = camera.matrices.perspective;
-	//globalParam.projection = glm::ortho(
-	//	-directLight.boundSize, directLight.boundSize,
-	//	-directLight.boundSize, directLight.boundSize,
-	//	directLight.zNear, directLight.zFar     // Z轴范围
-	//);
-	//globalParam.projection[1][1] *= -1.0f;
 	globalParam.camPos = camera.position;
 	
 	memcpy(globalParamBuffers[currentBuffer].globalParamBuffer.mapped, &globalParam, sizeof(GlobalParams));
@@ -251,8 +245,8 @@ void VulkanEngine::prepare()
 	prepareUniformBuffers();
 	prepareDescriptors();
 	preparePipelines();
-	pointLights.prepare(vulkanDevice, VK_FORMAT_D16_UNORM, &renderPasses[RP_PointLight]);
-	directLight.prepare(vulkanDevice, VK_FORMAT_D16_UNORM, &renderPasses[RP_DirectLight]);
+	//pointLights.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(true), &renderPasses[RP_PointLight]);
+	directLight.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(true), &renderPasses[RP_DirectLight]);
 	prepared = true;
 }
 
@@ -370,7 +364,10 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 				ImGui::InputFloat("NearPlane", &znear, 1, 100, "%.4f");
 				ImGui::InputFloat("FarPlane", &zfar, 1, 100, "%.1f");
 				if (fov != camera.fov || znear != camera.znear || zfar != camera.zfar)
+				{
 					camera.setPerspective(fov, (float)width / (float)height, znear, zfar);
+					directLight.updateCascades();
+				}
 			}
 		}
 		ImGui::Unindent();
@@ -389,21 +386,21 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 		{
 			if (ImGui::CollapsingHeader("太阳光")) {
 				bool PCF = vkLight::lightData.directLight.usePCF;
-				if (ImGui::Checkbox("PCF", &PCF))
+				bool colorCascades = vkLight::lightData.directLight.colorCascades;
+				if (ImGui::Checkbox("PCF", &PCF) ||
+					ImGui::Checkbox("colorCascades", &colorCascades) ||
+					ImGui::InputFloat("深度偏移", &directLight.depthBiasConstant) ||
+					ImGui::InputFloat("深度偏移斜率", &directLight.depthBiasSlope) || 
+					ImGui::ColorEdit3("太阳光颜色", (float*)&vkLight::lightData.directLight.color))
 				{
 					vkLight::lightData.directLight.usePCF = PCF;
+					vkLight::lightData.directLight.colorCascades = colorCascades;
 					vkLight::updateLightBuffer();
 				}
 				if (ImGui::InputFloat3("太阳方向", (float*)&vkLight::lightData.directLight.direct) ||
-					ImGui::ColorEdit3("太阳光颜色", (float*)&vkLight::lightData.directLight.color)||
-					ImGui::InputFloat("Near", &directLight.zNear)||
-					ImGui::InputFloat("Far", &directLight.zFar)||
-					ImGui::InputFloat("光源距离", &directLight.lightDistance)||
-					ImGui::InputFloat("包围盒边长", &directLight.boundSize)||
-					ImGui::InputFloat("深度偏移", &directLight.depthBiasConstant)||
-					ImGui::InputFloat("深度偏移斜率", &directLight.depthBiasSlope))
+					ImGui::SliderFloat("Split lambda", &directLight.cascadeSplitLambda, 0.1f, 1.f))
 				{
-					directLight.updateVPMatrix();
+					directLight.updateCascades();
 				}
 			}
 			if (ImGui::CollapsingHeader("点光源")) {

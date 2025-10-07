@@ -7,15 +7,15 @@ struct VSOutput
 {
     float4 Pos : SV_POSITION;
     float3 WorldPos;
+    float3 ViewPos;
     float3 Normal;
     float2 UV;
     float3 Tangent;
     float3 Color;
-    float4 ShadowCoord;
 };
 
 #define PI 3.1415926535897932384626433832795
-#define ALBEDO(uv) pow(baseColorTexture.Sample(uv).rgb, float3(2.2, 2.2, 2.2))
+//#define ALBEDO(uv) pow(baseColorTexture.Sample(uv).rgb, float3(2.2, 2.2, 2.2))
 //#define ALBEDO(uv) pow(materialParameters.baseColorTextureEmpty ? float3(1.0, 0, 0) : baseColorTexture.Sample(uv).rgb, float3(2.2, 2.2, 2.2))
 
 // From http://filmicgames.com/archives/75
@@ -200,26 +200,24 @@ float3 calculateNormal(VSOutput input)
 	return normalize(mul(TBN, tangentNormal));
 }
 
-[shader("vertex")]
-VSOutput vertexMain(VSInput input)
-{
-    // 偏置矩阵，用于将坐标从[-1, 1]范围（标准化设备坐标 NDC）转换为[0, 1]范围（纹理采样坐标）
-    static const float4x4 biasMat = float4x4(
+// 偏置矩阵，用于将坐标从[-1, 1]范围（标准化设备坐标 NDC）转换为[0, 1]范围（纹理采样坐标）
+static const float4x4 biasMat = float4x4(
     0.5, 0.0, 0.0, 0.5,
     0.0, 0.5, 0.0, 0.5,
     0.0, 0.0, 1.0, 0.0,
     0.0, 0.0, 0.0, 1.0);
 
+[shader("vertex")]
+VSOutput vertexMain(VSInput input)
+{
     VSOutput output;
-    float3 locPos = mul(meshInfo.model, float4(input.Pos, 1.0)).xyz;
-    output.WorldPos = locPos;
+    output.WorldPos = mul(meshInfo.model, float4(input.Pos, 1.0)).xyz;
+    output.ViewPos = mul(globalParams.view, float4(output.WorldPos.xyz, 1.0)).xyz;
     output.Normal = mul((float3x3)meshInfo.model, input.Normal);
     output.Tangent = mul((float3x3)meshInfo.model, input.Tangent.xyz);
 	output.UV = input.UV;
     output.Pos = mul(globalParams.projection, mul(globalParams.view, float4(output.WorldPos, 1.0)));
     output.Color = input.Color;
-    // 计算阴影坐标：局部空间 → 世界空间 → 光源空间 → 偏置转换
-    output.ShadowCoord = mul(biasMat, mul(lightParameter.directLight.directLightViewProj[0], mul(meshInfo.model, float4(input.Pos, 1.0))));
     return output;
 }
 
@@ -269,13 +267,20 @@ float4 fragmentMain(VSOutput input)
     metallic = clamp(metallic, 0.0, 1.0);
     roughness = clamp(roughness, 0.0, 1.0);
 
-    float3 albedoColor = materialParameters.baseColorTextureEmpty != 0 ? input.Color : ALBEDO(input.UV);
+    float4 albedoColor;
+    if (materialParameters.baseColorTextureEmpty != 0) {
+        albedoColor = float4(input.Color, 1.0);
+    }
+    else {
+        albedoColor = baseColorTexture.Sample(input.UV);
+        albedoColor.rgb = pow(albedoColor.rgb, float3(2.2, 2.2, 2.2));
+    }
     float3 emission = emissiveTexture.Sample(input.UV).rgb;
 
     // 计算基础反射率F0
     // 非金属材质使用0.04的默认值，金属材质使用反照率颜色
     float3 F0 = float3(0.04, 0.04, 0.04);
-    F0 = lerp(F0, albedoColor, metallic);
+    F0 = lerp(F0, albedoColor.rgb, metallic);
 
     // 累积点光源贡献
     float3 Lo = float3(0.0, 0.0, 0.0);
@@ -289,15 +294,31 @@ float4 fragmentMain(VSOutput input)
         float attenuation = calculateAttenuation(distance, lightParameter.pointLights[i].range, lightParameter.pointLights[i].attenuationMode);
 
         // 累加每个光源的贡献（已包含衰减）
-        Lo += specularContribution(albedoColor, lightParameter.pointLights[i].color.xyz, L, V, N, F0,  metallic, roughness, attenuation);
-	}
+        Lo += specularContribution(albedoColor.rgb, lightParameter.pointLights[i].color.xyz, L, V, N, F0,  metallic, roughness, attenuation);
+    }
 
-    //累积定向光贡献
+    uint cascadeIndex = 0;
+    //计算定向光贡献
     {
-        float shadow = (lightParameter.directLight.usePCF == 1) ? filterPCF(input.ShadowCoord / input.ShadowCoord.w) : textureProj(input.ShadowCoord / input.ShadowCoord.w, float2(0.0, 0.0));
+        // 获取级联阴影贴图级别
+        for (uint i = 0; i < lightParameter.directLight.cascadeCount - 1; ++i) {
+            if (input.ViewPos.z < lightParameter.directLight.cascadeSplits[i]) {
+                cascadeIndex = i + 1;
+            }
+        }
+
+        //将世界位置转换到定向光坐标空间，并通过biasMat转换到NDC空间得到阴影采样坐标
+        float4 shadowCoord = mul(biasMat, mul(lightParameter.directLight.ViewProj[cascadeIndex], float4(input.WorldPos, 1.0)));
+        float shadow = 0;
+        if (lightParameter.directLight.usePCF == 1) {
+            shadow = filterPCF(shadowCoord / shadowCoord.w, cascadeIndex);
+        } else {
+            shadow = textureProj(shadowCoord / shadowCoord.w, float2(0.0, 0.0), cascadeIndex);
+        }
+
         float3 lightDir = lightParameter.directLight.direct.xyz;
         float3 L = normalize(lightDir);
-        Lo += shadow * specularContribution(albedoColor, lightParameter.directLight.color.xyz, L, V, N, F0, metallic, roughness, 1.0);
+        Lo += shadow * specularContribution(albedoColor.rgb, lightParameter.directLight.color.xyz, L, V, N, F0, metallic, roughness, 1.0);
     }
 
     // 采样BRDF查找表，获取环境镜面反射的预计算值
@@ -312,7 +333,7 @@ float4 fragmentMain(VSOutput input)
     float3 irradiance = samplerIrradiance.Sample(N).rgb;
 
     // 计算环境漫反射贡献
-    float3 diffuse = irradiance * albedoColor;
+    float3 diffuse = irradiance * albedoColor.rgb;
 
     // 计算环境光的菲涅尔项
     float3 F = F_SchlickR(max(dot(N, V), 0.0), F0, roughness);
@@ -337,5 +358,9 @@ float4 fragmentMain(VSOutput input)
     // 应用伽马校正（线性空间 → sRGB空间）
     color = pow(color, (1.0f / globalParams.gamma).xxx);
 
-	return float4(color, 1.0);
+    if (lightParameter.directLight.colorCascades == 1) {
+        color *= getCascadeColor(cascadeIndex);
+    }
+
+    return float4(color, albedoColor.a);
 }

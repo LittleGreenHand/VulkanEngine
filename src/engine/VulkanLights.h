@@ -7,6 +7,8 @@
 
 namespace vkLight
 {
+	const uint32_t MAX_POINTLIGHTS = 16;
+	const uint32_t MAX_CASCADES = 8;
 	struct alignas(16) PointLightInfo {
 		glm::vec4 position;
 		glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 0.f);
@@ -16,11 +18,16 @@ namespace vkLight
 	struct alignas(16) DirectLightInfo {
 		glm::vec4 direct = glm::vec4(0.f, 1.0f, 1.0f, 0.f);
 		glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 0.f);
-		glm::mat4 directLightViewProj[8];
-		int cascadeCount;
-		int usePCF = 0;
+		glm::mat4 ViewProj[MAX_CASCADES];
+		//每个float元素按16字节对齐（std140要求）
+		struct alignas(16) CascadeSplit {
+			float value;
+		} cascadeSplits[MAX_CASCADES];
+		int cascadeCount = 3; //实际使用的级联数量
+		int usePCF = 1;
+		int colorCascades = 0;
+
 	};
-	const uint32_t MAX_POINTLIGHTS = 16;
 	struct alignas(16) LightUbo {
 		PointLightInfo pointLights[MAX_POINTLIGHTS]{};
 		int activePointLightCount = 1;
@@ -93,27 +100,31 @@ namespace vkLight
 
 		//是否需要更新描述符集
 		bool isDescriptorUpdated = true;
-
-		//glm::vec3 lightPos = glm::vec3(0, 0, 10);
-		glm::vec3 center = glm::vec3(0.0f);
-		glm::vec3 up = glm::vec3(0, 1, 0);
-		glm::mat4 VP;//光源视角的视图投影矩阵
-		// 尽量缩小深度范围，以获得更好的阴影贴图精度
-		float zNear = 1.0f;
-		float zFar = 96.0f;
 		// 深度偏移因子,用于避免阴影伪影
-		float depthBiasConstant = 1.25f;
+		float depthBiasConstant = 0.f;
 		// 深度偏移斜率因子，根据多边形的斜率进行应用
-		float depthBiasSlope = 1.75f;
-		//光源与世界原点的距离，影响了从世界哪个位置开始绘制阴影贴图
-		float lightDistance = 45.0f;
-		//场景包围盒边长，值越小，阴影越清晰
-		float boundSize = 10.0f;
-		Dimensions sceneDimensions;
+		float depthBiasSlope = 0.f;
+		float cascadeSplitLambda = 0.75f;
 
 		RenderPassInfo* renderPass = nullptr;//此pass用于生成ShadowMap
 		VkFormat shadowMapFormat{ VK_FORMAT_D16_UNORM };//ShadowMap的格式
-		uint32_t shadowMapize{ 2048 };
+		uint32_t shadowMapize{ 4096 };
+		struct Cascade {
+			VkFramebuffer frameBuffer{ VK_NULL_HANDLE };
+			VkImageView view{ VK_NULL_HANDLE };
+			float splitDepth{0.f};
+			glm::mat4 viewProjMatrix;
+			glm::mat4 viewMat;
+			glm::mat4 Proj;
+
+			void destroy(VkDevice device) const {
+				if (view != VK_NULL_HANDLE)
+					vkDestroyImageView(device, view, nullptr);
+				if (frameBuffer != VK_NULL_HANDLE)
+					vkDestroyFramebuffer(device, frameBuffer, nullptr);
+			}
+		};
+		Cascade cascades[MAX_CASCADES];
 	public:
 		~VulkanDirectLights()
 		{
@@ -126,22 +137,25 @@ namespace vkLight
 					vkDestroyPipeline(vulkanDevice->logicalDevice, pipeline, nullptr);
 				if (pipelineLayout != VK_NULL_HANDLE)
 					vkDestroyPipelineLayout(vulkanDevice->logicalDevice, pipelineLayout, nullptr);
+				for (int i = 0; i < MAX_CASCADES; ++i)
+					cascades[i].destroy(vulkanDevice->logicalDevice);
 				vulkanDevice = nullptr;
 			}
 			renderPass = nullptr;
 		}
-		void updateDimensions();
-		void updateVPMatrix();
+		void updateCascades();
 
 		void prepare(vks::VulkanDevice* vulkanDevice, VkFormat depthFormat, RenderPassInfo* renderPass)
 		{
+			std::cout << "directLight.cascadeSplits offset: " << offsetof(DirectLightInfo, cascadeSplits) << std::endl;
+			std::cout << "directLight.cascadeCount offset: " << offsetof(DirectLightInfo, cascadeCount) << std::endl;
 			this->vulkanDevice = vulkanDevice;
 			device = vulkanDevice->logicalDevice;
 			this->renderPass = renderPass;
 			shadowMapFormat = depthFormat;
 			prepareFramebuffer();
 			preperPipeline();
-			updateVPMatrix();
+			updateCascades();
 		}
 		void prepareFramebuffer();
 		void preperRenderPass(bool useDepth = true);

@@ -66,4 +66,27 @@ struct Dimensions {
 	glm::vec3 size;
 	glm::vec3 center;
 	float radius;
+
+	// 生成AABB的8个世界空间角点
+	std::vector<glm::vec3> getAABBCorners(const glm::mat4& modelMatrix = glm::mat4(1.0f)) {
+		std::vector<glm::vec3> corners(8);
+
+		// 定义AABB在本地空间的8个角点（基于min和max）
+		corners[0] = glm::vec3(min.x, min.y, min.z); // 前下左
+		corners[1] = glm::vec3(max.x, min.y, min.z); // 前下右
+		corners[2] = glm::vec3(max.x, max.y, min.z); // 前上右
+		corners[3] = glm::vec3(min.x, max.y, min.z); // 前上左
+		corners[4] = glm::vec3(min.x, min.y, max.z); // 后下左
+		corners[5] = glm::vec3(max.x, min.y, max.z); // 后下右
+		corners[6] = glm::vec3(max.x, max.y, max.z); // 后上右
+		corners[7] = glm::vec3(min.x, max.y, max.z); // 后上左
+
+		// 将本地空间角点转换为世界空间
+		for (int i = 0; i < 8; i++) {
+			glm::vec4 worldPos = modelMatrix * glm::vec4(corners[i], 1.0f);
+			corners[i] = worldPos / worldPos.w; // 齐次坐标归一化
+		}
+
+		return corners;
+	}
 };

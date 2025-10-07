@@ -5,7 +5,7 @@ VkDescriptorSetLayout vkLight::descriptorSetLayout{ VK_NULL_HANDLE };
 VkDescriptorSet vkLight::descriptorSet{ VK_NULL_HANDLE };
 vkLight::LightUbo vkLight::lightData{};
 vks::Buffer vkLight::lightBuffer{};
-//-------------------------点光-------------------------
+//-------------------------点光 START-------------------------
 
 void vkLight::preperDescriptor(vks::VulkanDevice* vulkanDevice, VkDescriptorPool descriptorPool)
 {
@@ -178,30 +178,97 @@ void vkLight::VulkanPointLights::preperRenderPass(bool useDepth)
 
 //-------------------------点光 END-------------------------
 
-//-------------------------定向光-------------------------
-
-void vkLight::VulkanDirectLights::updateDimensions()
+//-------------------------定向光 START-------------------------
+void vkLight::VulkanDirectLights::updateCascades()
 {
-	sceneDimensions = vkUtils::GetSceneDimensions();
-	updateVPMatrix();
-}
+	float cascadeSplits[MAX_CASCADES];
 
-void vkLight::VulkanDirectLights::updateVPMatrix()
-{
-	// 1. 计算光源视图矩阵（从光源视角看向场景中心）
-	glm::vec3 lightDir = glm::normalize(lightData.directLight.direct);
-	glm::vec3 lightPosition = sceneDimensions.center + lightDir * lightDistance;
-	glm::mat4 ViewMatrix = glm::lookAt(lightPosition, sceneDimensions.center, up);
+	float nearClip = vkUtils::vkEngine->camera.getNearClip();
+	float farClip = vkUtils::vkEngine->camera.getFarClip();
+	float clipRange = farClip - nearClip;
 
-	glm::mat4 ProjectionMatrix = glm::ortho(-boundSize, boundSize, -boundSize, boundSize, zNear, zFar);
-	ProjectionMatrix[1][1] *= -1.0f;
+	float minZ = nearClip;
+	float maxZ = nearClip + clipRange;
 
-	VP = ProjectionMatrix * ViewMatrix;
-	lightData.directLight.directLightViewProj[0] = VP;
+	float range = maxZ - minZ;
+	float ratio = maxZ / minZ;
+
+	// Calculate split depths based on view camera frustum
+	// Based on method presented in https://developer.nvidia.com/gpugems/GPUGems3/gpugems3_ch10.html
+	for (int i = 0; i < lightData.directLight.cascadeCount; i++) {
+		float p = (i + 1) / static_cast<float>(lightData.directLight.cascadeCount);
+		float log = minZ * std::pow(ratio, p);
+		float uniform = minZ + range * p;
+		float d = cascadeSplitLambda * (log - uniform) + uniform;
+		cascadeSplits[i] = (d - nearClip) / clipRange;
+	}
+
+	// Calculate orthographic projection matrix for each cascade
+	float lastSplitDist = 0.0;
+	for (int i = 0; i < lightData.directLight.cascadeCount; i++) {
+		float splitDist = cascadeSplits[i];
+
+		glm::vec3 frustumCorners[8] = {
+			glm::vec3(-1.0f,  1.0f, 0.0f),
+			glm::vec3(1.0f,  1.0f, 0.0f),
+			glm::vec3(1.0f, -1.0f, 0.0f),
+			glm::vec3(-1.0f, -1.0f, 0.0f),
+			glm::vec3(-1.0f,  1.0f,  1.0f),
+			glm::vec3(1.0f,  1.0f,  1.0f),
+			glm::vec3(1.0f, -1.0f,  1.0f),
+			glm::vec3(-1.0f, -1.0f,  1.0f),
+		};
+
+		// Project frustum corners into world space
+		glm::mat4 invCam = glm::inverse(vkUtils::vkEngine->camera.matrices.perspective * vkUtils::vkEngine->camera.matrices.view);
+		for (int j = 0; j < 8; j++) {
+			glm::vec4 invCorner = invCam * glm::vec4(frustumCorners[j], 1.0f);
+			frustumCorners[j] = invCorner / invCorner.w;
+		}
+
+		for (uint32_t j = 0; j < 4; j++) {
+			glm::vec3 dist = frustumCorners[j + 4] - frustumCorners[j];
+			frustumCorners[j + 4] = frustumCorners[j] + (dist * splitDist);
+			frustumCorners[j] = frustumCorners[j] + (dist * lastSplitDist);
+		}
+
+		// Get frustum center
+		glm::vec3 frustumCenter = glm::vec3(0.0f);
+		for (uint32_t j = 0; j < 8; j++) {
+			frustumCenter += frustumCorners[j];
+		}
+		frustumCenter /= 8.0f;
+
+		float radius = 0.0f;
+		for (uint32_t j = 0; j < 8; j++) {
+			float distance = glm::length(frustumCorners[j] - frustumCenter);
+			radius = glm::max(radius, distance);
+		}
+		radius = std::ceil(radius * 16.0f) / 16.0f;
+
+		glm::vec3 maxExtents = glm::vec3(radius);
+		glm::vec3 minExtents = -maxExtents;
+
+		glm::vec3 lightDir = glm::normalize(-lightData.directLight.direct);
+		glm::vec3 up = vkUtils:: generateUpVector(lightDir);
+		glm::mat4 lightViewMatrix = glm::lookAt(frustumCenter - lightDir * -minExtents.z, frustumCenter, up);
+		glm::mat4 lightOrthoMatrix = glm::ortho(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, 0.0f, maxExtents.z - minExtents.z);
+		lightOrthoMatrix[1][1] *= -1.0f;
+		// Store split distance and matrix in cascade
+		cascades[i].splitDepth = (vkUtils::vkEngine->camera.getNearClip() + splitDist * clipRange) * -1.0f;
+		cascades[i].viewProjMatrix = lightOrthoMatrix * lightViewMatrix;
+		cascades[i].viewMat = lightViewMatrix;
+		cascades[i].Proj = lightOrthoMatrix;
+
+		lastSplitDist = cascadeSplits[i];
+	}
+	for (int i = 0; i < lightData.directLight.cascadeCount; i++) {
+		lightData.directLight.ViewProj[i] = cascades[i].viewProjMatrix;
+		lightData.directLight.cascadeSplits[i].value = cascades[i].splitDepth;
+	}
 
 	updateLightBuffer();
 }
-
 void vkLight::VulkanDirectLights::prepareFramebuffer()
 {
 	renderPass->width = shadowMapize;
@@ -214,10 +281,10 @@ void vkLight::VulkanDirectLights::prepareFramebuffer()
 	image.extent.height = renderPass->height;
 	image.extent.depth = 1;
 	image.mipLevels = 1;
-	image.arrayLayers = 1;
+	image.arrayLayers = lightData.directLight.cascadeCount;
 	image.samples = VK_SAMPLE_COUNT_1_BIT;
 	image.tiling = VK_IMAGE_TILING_OPTIMAL;
-	image.format = shadowMapFormat;																// Depth stencil attachment
+	image.format = shadowMapFormat;
 	image.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;		// We will sample directly from the depth attachment for the shadow mapping
 	VK_CHECK_RESULT(vkCreateImage(device, &image, nullptr, &renderPass->depthAttachment.image));
 	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)renderPass->depthAttachment.image, "DirectLightShadowTexture");
@@ -231,14 +298,14 @@ void vkLight::VulkanDirectLights::prepareFramebuffer()
 	VK_CHECK_RESULT(vkBindImageMemory(device, renderPass->depthAttachment.image, renderPass->depthAttachment.deviceMemory, 0));
 
 	VkImageViewCreateInfo depthStencilView = vks::initializers::imageViewCreateInfo();
-	depthStencilView.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	depthStencilView.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
 	depthStencilView.format = shadowMapFormat;
 	depthStencilView.subresourceRange = {};
 	depthStencilView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 	depthStencilView.subresourceRange.baseMipLevel = 0;
 	depthStencilView.subresourceRange.levelCount = 1;
 	depthStencilView.subresourceRange.baseArrayLayer = 0;
-	depthStencilView.subresourceRange.layerCount = 1;
+	depthStencilView.subresourceRange.layerCount = lightData.directLight.cascadeCount;
 	depthStencilView.image = renderPass->depthAttachment.image;
 	VK_CHECK_RESULT(vkCreateImageView(device, &depthStencilView, nullptr, &renderPass->depthAttachment.view));
 
@@ -261,16 +328,31 @@ void vkLight::VulkanDirectLights::prepareFramebuffer()
 	renderPass->depthAttachment.device = vulkanDevice;
 	preperRenderPass();
 
-	// Create frame buffer
-	VkFramebufferCreateInfo fbufCreateInfo = vks::initializers::framebufferCreateInfo();
-	fbufCreateInfo.renderPass = renderPass->renderPass;
-	fbufCreateInfo.attachmentCount = 1;
-	fbufCreateInfo.pAttachments = &renderPass->depthAttachment.view;
-	fbufCreateInfo.width = renderPass->width;
-	fbufCreateInfo.height = renderPass->height;
-	fbufCreateInfo.layers = 1;
-
-	VK_CHECK_RESULT(vkCreateFramebuffer(device, &fbufCreateInfo, nullptr, &renderPass->frameBuffer));
+	// One image view and framebuffer per cascade
+	for (int i = 0; i < lightData.directLight.cascadeCount; i++) {
+		// Image view for this cascade's layer (inside the depth map)
+		// This view is used to render to that specific depth image layer
+		VkImageViewCreateInfo viewInfo = vks::initializers::imageViewCreateInfo();
+		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+		viewInfo.format = shadowMapFormat;
+		viewInfo.subresourceRange = {};
+		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		viewInfo.subresourceRange.baseMipLevel = 0;
+		viewInfo.subresourceRange.levelCount = 1;
+		viewInfo.subresourceRange.baseArrayLayer = i;
+		viewInfo.subresourceRange.layerCount = 1;
+		viewInfo.image = renderPass->depthAttachment.image;
+		VK_CHECK_RESULT(vkCreateImageView(device, &viewInfo, nullptr, &cascades[i].view));
+		// Framebuffer
+		VkFramebufferCreateInfo framebufferInfo = vks::initializers::framebufferCreateInfo();
+		framebufferInfo.renderPass = renderPass->renderPass;
+		framebufferInfo.attachmentCount = 1;
+		framebufferInfo.pAttachments = &cascades[i].view;
+		framebufferInfo.width = renderPass->width;
+		framebufferInfo.height = renderPass->height;
+		framebufferInfo.layers = 1;
+		VK_CHECK_RESULT(vkCreateFramebuffer(device, &framebufferInfo, nullptr, &cascades[i].frameBuffer));
+	}
 
 	//更新描述符集
 	if (isDescriptorUpdated)
@@ -368,37 +450,38 @@ void vkLight::VulkanDirectLights::Render(VkCommandBuffer cmdBuffer)
 {
 	VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 
-	VkClearValue clearValues[2]{};
+	VkClearValue clearValues[1]{};
 	{
 		clearValues[0].depthStencil = { 1.0f, 0 };
 
 		VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
 		renderPassBeginInfo.renderPass = renderPass->renderPass;
-		renderPassBeginInfo.framebuffer = renderPass->frameBuffer;
 		renderPassBeginInfo.renderArea.extent.width = renderPass->width;
 		renderPassBeginInfo.renderArea.extent.height = renderPass->height;
 		renderPassBeginInfo.clearValueCount = 1;
 		renderPassBeginInfo.pClearValues = clearValues;
-
-		vkCmdBeginRenderPass(cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 		VkViewport viewport = vks::initializers::viewport((float)renderPass->width, (float)renderPass->height, 0.0f, 1.0f);
 		vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
 		VkRect2D scissor = vks::initializers::rect2D(renderPass->width, renderPass->height, 0, 0);
 		vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
-		// 设置深度偏移（又称 “多边形偏移”），这是避免阴影映射伪影所必需的
-		vkCmdSetDepthBias( cmdBuffer, depthBiasConstant, 0.0f, depthBiasSlope);
-
 		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline DirectLightShadow", { 1.0f, 1.0f, 1.0f });
-		updateDimensions();
-		for (auto& [key, model] : vkUtils::vkEngine->models)
-		{
-			model.drawWithPushConstant(cmdBuffer,pipelineLayout, VP);
+		vkCmdSetDepthBias( cmdBuffer, depthBiasConstant, 0.0f, depthBiasSlope);
+		// One pass per cascade
+		for (int j = 0; j < lightData.directLight.cascadeCount; j++) {
+			renderPassBeginInfo.framebuffer = cascades[j].frameBuffer;
+			vkCmdBeginRenderPass(cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+			for (auto& [key, model] : vkUtils::vkEngine->models)
+			{
+				model.drawWithPushConstant(cmdBuffer, pipelineLayout, cascades[j].viewProjMatrix);
+			}
+
+			vkCmdEndRenderPass(cmdBuffer);
 		}
 		vkUtils::cmdEndLabel(cmdBuffer);
-		vkCmdEndRenderPass(cmdBuffer);
 	}
 
 	/*
