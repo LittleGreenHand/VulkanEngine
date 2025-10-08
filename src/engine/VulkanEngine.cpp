@@ -6,7 +6,7 @@ void VulkanEngine::getEnabledFeatures()
 	if (deviceFeatures.samplerAnisotropy) {
 		enabledFeatures.samplerAnisotropy = VK_TRUE;
 	}
-
+	enabledFeatures.imageCubeArray = VK_TRUE;//启用立方体贴图数组
 	vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
 	vulkan11Features.shaderDrawParameters = VK_TRUE;
 
@@ -245,7 +245,7 @@ void VulkanEngine::prepare()
 	prepareUniformBuffers();
 	prepareDescriptors();
 	preparePipelines();
-	//pointLights.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(true), &renderPasses[RP_PointLight]);
+	pointLights.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(false), &renderPasses[RP_PointLight]);
 	directLight.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(true), &renderPasses[RP_DirectLight]);
 	prepared = true;
 }
@@ -258,8 +258,9 @@ void VulkanEngine::buildCommandBuffer()
 
 	VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
 
-	//绘制阴影贴图
+	//绘制方向光和点光的阴影贴图	
 	directLight.Render(cmdBuffer);
+	pointLights.Render(cmdBuffer);
 
 	VkClearValue clearValues[3]{};
 	clearValues[0].color = { { 0.25f, 0.25f, 0.25f, 1.0f } };;
@@ -384,6 +385,13 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 	if (ImGui::CollapsingHeader("光源设置")) {
 		ImGui::Indent();
 		{
+			bool isRnder = vkLight::lightData.directLight.isRnder;
+			if (ImGui::Checkbox("##vis_SunLight", &isRnder))
+			{
+				vkLight::lightData.directLight.isRnder = isRnder;
+				vkLight::updateLightBuffer();
+			}
+			ImGui::SameLine(0, 4);
 			if (ImGui::CollapsingHeader("太阳光")) {
 				bool PCF = vkLight::lightData.directLight.usePCF;
 				bool colorCascades = vkLight::lightData.directLight.colorCascades;
@@ -403,26 +411,43 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 					directLight.updateCascades();
 				}
 			}
+
 			if (ImGui::CollapsingHeader("点光源")) {
+				int oldCount = vkLight::lightData.activePointLightCount;
 				if (ImGui::SliderInt("光源数量", &vkLight::lightData.activePointLightCount, 0, vkLight::MAX_POINTLIGHTS))
 				{
 					vkLight::updateLightBuffer();
+					if (vkLight::lightData.activePointLightCount > oldCount)
+					{
+						vkDeviceWaitIdle(device);
+						pointLights.destroy();
+						renderPasses[RP_PointLight].destroy(device);
+						pointLights.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(false), &renderPasses[RP_PointLight]);
+					}
 				}
 				ImGui::Separator();
 				ImGui::Separator();
 				ImGui::Text("");
 				for (int i = 0; i < vkLight::lightData.activePointLightCount; i++)
 				{
-					std::string lightName = "光源" + std::to_string(i);
-					if (ImGui::InputFloat3((lightName + "位置").c_str(), (float*)&vkLight::lightData.pointLights[i].position, "%.2f") ||
-						ImGui::ColorEdit3((lightName + "颜色").c_str(), (float*)&vkLight::lightData.pointLights[i].color) ||
-						ImGui::SliderFloat((lightName + "范围").c_str(), &vkLight::lightData.pointLights[i].range, 0, 256) ||
-						ImGui::SliderInt((lightName + "衰减模式").c_str(), &vkLight::lightData.pointLights[i].attenuationMode, 0, 2))
+					std::string lightName = "点光源" + std::to_string(i);
+					std::string str_id = "##PointLight" + std::to_string(i);
+					bool isRnder = vkLight::lightData.pointLights[i].isRnder;
+					if(ImGui::Checkbox((str_id + "isRnder").c_str(), &isRnder))
 					{
+						vkLight::lightData.pointLights[i].isRnder = isRnder;
 						vkLight::updateLightBuffer();
 					}
-					ImGui::Text("");
-					ImGui::Separator();
+					ImGui::SameLine(0, 4);
+					if (ImGui::CollapsingHeader(lightName.c_str())) {
+						if (ImGui::InputFloat3(("位置" + str_id).c_str(), (float*)&vkLight::lightData.pointLights[i].position, "%.2f") ||
+							ImGui::ColorEdit3(("颜色" + str_id).c_str(), (float*)&vkLight::lightData.pointLights[i].color) ||
+							ImGui::SliderFloat(("范围" + str_id).c_str(), &vkLight::lightData.pointLights[i].range, 0, 256) ||
+							ImGui::SliderInt(("衰减模式" + str_id).c_str(), &vkLight::lightData.pointLights[i].attenuationMode, 0, 2))
+						{
+							vkLight::updateLightBuffer();
+						}
+					}
 				}
 			}
 		}

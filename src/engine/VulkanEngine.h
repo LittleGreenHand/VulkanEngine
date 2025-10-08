@@ -124,6 +124,7 @@ public:
 	void preparePipelines();
 	void prepareUniformBuffers();
 	void updateUniformBuffers();
+	//初始化引擎各类资源
 	void prepare() override;
 	virtual void render() override;
 	virtual void OnUpdateUIOverlay(vks::UIOverlay* overlay) override;

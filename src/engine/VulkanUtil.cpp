@@ -1142,6 +1142,14 @@ glm::quat vkUtils::eularToQuaternion(const glm::vec3& euler)
 	return roll * yaw * pitch;
 }
 
+glm::vec3 vkUtils::generateUpVector(const glm::vec3& forward) {
+	// 找到与forward不共线的垂直向量
+	glm::vec3 ref = (std::abs(forward.x) > std::abs(forward.z))
+		? glm::vec3(forward.z, 0, -forward.x)  // 与X-Z平面垂直
+		: glm::vec3(0, -forward.z, forward.y); // 与Y-Z平面垂直
+	return glm::normalize(ref);
+}
+
 // 在类中添加静态变量跟踪选中的节点
 vkglTF::Node* vkUtils::selectedNode = nullptr;
 

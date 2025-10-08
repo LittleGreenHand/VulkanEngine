@@ -1,10 +1,12 @@
+#define MAX_CASCADES 8
+#define SHADOW_ATTENUATION_MIN 0
 struct PointLightInfo {
     float4 position;
     float4 color;
     float range;
     int attenuationMode;
+    int isRnder;
 };
-#define MAX_CASCADES 8
 struct DirectLightInfo {
     float4 direct;
     float4 color;
@@ -13,6 +15,7 @@ struct DirectLightInfo {
     int cascadeCount;
     int usePCF;
     int colorCascades;
+    int isRnder;
 };
 struct LightParameters
 {
@@ -23,8 +26,9 @@ struct LightParameters
 };
 [[vk::binding(0, 2)]] ConstantBuffer<LightParameters> lightParameter;
 [[vk::binding(1, 2)]] Sampler2DArray directLightShadowMap;
+[[vk::binding(2, 2)]] SamplerCubeArray pointLightShadowCubeMap;
 
-#define SHADOW_ATTENUATION_MIN 0
+//计算定向光阴影
 float textureProj(float4 shadowCoord, float2 offset, uint cascadeIndex)
 {
     float shadowFactor = 1.0; // 非阴影区域：直接光照完全贡献
@@ -41,6 +45,7 @@ float textureProj(float4 shadowCoord, float2 offset, uint cascadeIndex)
     return shadowFactor; // 仅影响直接光照的贡献比例
 }
 
+// 为定向光阴影计算PCF滤波
 float filterPCF(float4 sc, uint cascadeIndex)
 {
     int3 texDim;

@@ -90,3 +90,10 @@ struct Dimensions {
 		return corners;
 	}
 };
+
+struct PushConstantConfig {
+	const void* data = nullptr;               // 自定义推送常量数据
+	size_t size = 0;                          // 自定义推送常量大小
+	VkShaderStageFlags stages = 0;            // 影响的着色器阶段
+	uint32_t offset = 0;                      // 在推送常量布局中的偏移量
+};

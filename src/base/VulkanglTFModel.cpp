@@ -1618,7 +1618,7 @@ void vkglTF::Model::drawNode(Node *node, VkCommandBuffer commandBuffer, uint32_t
 	}
 }
 
-void vkglTF::Model::drawWithPushConstant(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, const glm::mat4& VP, uint32_t renderFlags)
+void vkglTF::Model::drawWithPushConstant(VkCommandBuffer commandBuffer, VkShaderStageFlags stageFlags, VkPipelineLayout pipelineLayout, const glm::mat4& VP, bool pushModelMatrix)
 {
 	if (!buffersBound) {
 		const VkDeviceSize offsets[1] = { 0 };
@@ -1626,22 +1626,26 @@ void vkglTF::Model::drawWithPushConstant(VkCommandBuffer commandBuffer, VkPipeli
 		vkCmdBindIndexBuffer(commandBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 	}
 	for (auto& node : nodes) {
-		drawNodeWithPushConstant(node, commandBuffer, pipelineLayout, VP, renderFlags);
+		drawNodeWithPushConstant(node, commandBuffer, stageFlags, pipelineLayout, VP, pushModelMatrix);
 	}
 }
-void vkglTF::Model::drawNodeWithPushConstant(Node* node, VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, const glm::mat4& VP, uint32_t renderFlags)
+void vkglTF::Model::drawNodeWithPushConstant(Node* node, VkCommandBuffer commandBuffer, VkShaderStageFlags stageFlags, VkPipelineLayout pipelineLayout, const glm::mat4& VP, bool pushModelMatrix)
 {
 	if (!node->visible)
 		return;
 	if (node->mesh) {
 		//通过推送常量更新MVP矩阵
-		vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &(VP * node->mesh->uniformBlock.modelMatrix)[0]);
+		vkCmdPushConstants(commandBuffer, pipelineLayout, stageFlags, 0, sizeof(glm::mat4), &(VP * node->mesh->uniformBlock.modelMatrix)[0]);
+		if (pushModelMatrix) {
+			vkCmdPushConstants(commandBuffer, pipelineLayout, stageFlags, sizeof(glm::mat4), sizeof(glm::mat4), &(node->mesh->uniformBlock.modelMatrix)[0]);
+		}
+
 		for (Primitive* primitive : node->mesh->primitives) {
 			vkCmdDrawIndexed(commandBuffer, primitive->indexCount, 1, primitive->firstIndex, 0, 0);
 		}
 	}
 	for (auto& child : node->children) {
-		drawNodeWithPushConstant(child, commandBuffer, pipelineLayout, VP, renderFlags);
+		drawNodeWithPushConstant(child, commandBuffer, stageFlags, pipelineLayout, VP, pushModelMatrix);
 	}
 }
 

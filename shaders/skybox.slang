@@ -6,22 +6,6 @@ struct VSOutput
     float3 UVW;
 };
 
-//struct UBO
-//{
-//    float4x4 projection;
-//    float4x4 model;
-//};
-//ConstantBuffer<UBO> ubo;
-
-//struct UBOParams {
-//	float4 lights[4];
-//	float exposure;
-//	float gamma;
-//};
-//ConstantBuffer<UBOParams> uboParams;
-
-//SamplerCube samplerEnv;
-
 // From http://filmicworlds.com/blog/filmic-tonemapping-operators/
 float3 Uncharted2Tonemap(float3 color)
 {

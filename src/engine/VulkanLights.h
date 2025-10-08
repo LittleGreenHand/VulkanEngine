@@ -1,9 +1,11 @@
 #pragma once
 #include <vulkan/vulkan.h>
+#include <array>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include "VulkanDevice.h"
 #include "types.hpp"
+#include "VulkanTexture.h"
 
 namespace vkLight
 {
@@ -14,6 +16,7 @@ namespace vkLight
 		glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 0.f);
 		float range = 10.0f;			//光源影响范围
 		int attenuationMode = 0;	//衰减模式 0:线性衰减 1:平方反比衰减 2:物理衰减
+		int isRnder = 1;
 	};
 	struct alignas(16) DirectLightInfo {
 		glm::vec4 direct = glm::vec4(0.f, 1.0f, 1.0f, 0.f);
@@ -26,6 +29,7 @@ namespace vkLight
 		int cascadeCount = 3; //实际使用的级联数量
 		int usePCF = 1;
 		int colorCascades = 0;
+		int isRnder = 1;
 
 	};
 	struct alignas(16) LightUbo {
@@ -49,10 +53,26 @@ namespace vkLight
 	public:
 		vks::VulkanDevice* vulkanDevice;
 		VkDevice device;
+		VkPipeline pipeline{ VK_NULL_HANDLE };
+		VkPipelineLayout pipelineLayout{ VK_NULL_HANDLE };
 
-		RenderPassInfo* renderPass = nullptr;//此pass用于生成ShadowMap
-		VkFormat shadowMapFormat;//ShadowMap的格式
-		uint32_t shadowMapize{ 2048 };
+		//是否需要更新描述符集
+		bool isDescriptorUpdated = true;
+		//此pass用于生成ShadowMap
+		RenderPassInfo* renderPass = nullptr;
+		// 阴影立方体贴图每个面的尺寸
+		const uint32_t shadowCubeSize{ 1024 };
+		// 阴影立方体贴图格式
+		const VkFormat shadowCubeFormat{ VK_FORMAT_R32_SFLOAT };
+		VkFormat shadowDepthFormat{ VK_FORMAT_UNDEFINED };
+		struct LitghtResource
+		{
+			vks::Texture shadowCubeMap{ VK_NULL_HANDLE };//每个点光源都有一个阴影立方体贴图
+			std::array<VkImageView, 6 * MAX_POINTLIGHTS> shadowCubeMapFaceImageViews;//立方体贴图的每个面对应一个ImageView
+			std::array<VkFramebuffer, 6 * MAX_POINTLIGHTS> frameBuffers;//立方体贴图的每个面对应一个Framebuffer
+		};
+		LitghtResource lightResource;
+		glm::mat4 viewMatrix[6];//立方体贴图的6个面的视图矩阵
 	public:
 		~VulkanPointLights()
 		{
@@ -60,34 +80,52 @@ namespace vkLight
 		}
 		void destroy()
 		{
-			vulkanDevice = nullptr;
+			if (vulkanDevice) {
+				if (pipeline != VK_NULL_HANDLE)
+					vkDestroyPipeline(vulkanDevice->logicalDevice, pipeline, nullptr);
+				if (pipelineLayout != VK_NULL_HANDLE)
+					vkDestroyPipelineLayout(vulkanDevice->logicalDevice, pipelineLayout, nullptr);
+				lightResource.shadowCubeMap.destroy();
+				for (int id = 0; id < MAX_POINTLIGHTS * 6; ++id)
+				{
+					if (lightResource.shadowCubeMapFaceImageViews[id])
+						vkDestroyImageView(device, lightResource.shadowCubeMapFaceImageViews[id], nullptr);
+					if(lightResource.frameBuffers[id])
+						vkDestroyFramebuffer(device, lightResource.frameBuffers[id], nullptr);					
+				}
+				vulkanDevice = nullptr;
+			}
 			renderPass = nullptr;
 		}
-		void setLightPosition(uint32_t index, glm::vec3 pos) {
-			if (index >= MAX_POINTLIGHTS) return;
-			lightData.pointLights[index].position = glm::vec4(pos, 1.0f);
-		}
 
-		void setLightColor(uint32_t index, glm::vec3 color) {
-			if (index >= MAX_POINTLIGHTS) return;
-			lightData.pointLights[index].color = glm::vec4(color, 1.0f);
-		}
-
-		void setActiveLightCount(uint32_t count) {
-			if (count > MAX_POINTLIGHTS) count = MAX_POINTLIGHTS;
-			lightData.activePointLightCount = count;
-		}
-
-		void prepare(vks::VulkanDevice* vulkanDevice, VkFormat depthFormat, RenderPassInfo* renderPass)
+		void prepare(vks::VulkanDevice* vulkanDevice, VkFormat depthFormat, RenderPassInfo* renderPass, bool isDescriptorUpdated = true)
 		{
+			this->isDescriptorUpdated = isDescriptorUpdated;
 			this->vulkanDevice = vulkanDevice;
 			device = vulkanDevice->logicalDevice;
 			this->renderPass = renderPass;
-			shadowMapFormat = depthFormat;
+			renderPass->width = shadowCubeSize;
+			renderPass->height = shadowCubeSize;
+			shadowDepthFormat = depthFormat;
+			for (int id = 0; id < MAX_POINTLIGHTS * 6; ++id)
+			{
+				lightResource.shadowCubeMapFaceImageViews.fill(VK_NULL_HANDLE);
+				lightResource.frameBuffers.fill(VK_NULL_HANDLE);
+			}
+			preperShadowCubeMap();
+			preperRenderPass();
 			prepareFramebuffer();
+			preperPipeline();
+			preperViewMatrix();
 		}
+		void preperShadowCubeMap();
 		void prepareFramebuffer();
-		void preperRenderPass(bool useDepth = true);
+		void preperRenderPass();
+		void preperPipeline();
+		void preperViewMatrix();
+
+		//绘制阴影贴图
+		void Render(VkCommandBuffer cmdBuffer);
 	};
 
 	class VulkanDirectLights
@@ -145,10 +183,9 @@ namespace vkLight
 		}
 		void updateCascades();
 
-		void prepare(vks::VulkanDevice* vulkanDevice, VkFormat depthFormat, RenderPassInfo* renderPass)
+		void prepare(vks::VulkanDevice* vulkanDevice, VkFormat depthFormat, RenderPassInfo* renderPass, bool isDescriptorUpdated = true)
 		{
-			std::cout << "directLight.cascadeSplits offset: " << offsetof(DirectLightInfo, cascadeSplits) << std::endl;
-			std::cout << "directLight.cascadeCount offset: " << offsetof(DirectLightInfo, cascadeCount) << std::endl;
+			this->isDescriptorUpdated = isDescriptorUpdated;
 			this->vulkanDevice = vulkanDevice;
 			device = vulkanDevice->logicalDevice;
 			this->renderPass = renderPass;

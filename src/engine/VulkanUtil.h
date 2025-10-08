@@ -46,7 +46,7 @@ public:
 public:
 	//数学相关
 	static glm::quat eularToQuaternion(const glm::vec3& euler);
-
+	static glm::vec3 generateUpVector(const glm::vec3& forward);
 public:
 	//UI相关
 	static vkglTF::Node* selectedNode;

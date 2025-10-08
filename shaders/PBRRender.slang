@@ -5,7 +5,7 @@ import "Binding_Mesh.slang";
 
 struct VSOutput
 {
-    float4 Pos : SV_POSITION;
+    float4 Pos : SV_POSITION; // 顶点的裁剪空间位置，带有SV_POSITION语义，因此在片段着色器中不会被插值
     float3 WorldPos;
     float3 ViewPos;
     float3 Normal;
@@ -15,8 +15,6 @@ struct VSOutput
 };
 
 #define PI 3.1415926535897932384626433832795
-//#define ALBEDO(uv) pow(baseColorTexture.Sample(uv).rgb, float3(2.2, 2.2, 2.2))
-//#define ALBEDO(uv) pow(materialParameters.baseColorTextureEmpty ? float3(1.0, 0, 0) : baseColorTexture.Sample(uv).rgb, float3(2.2, 2.2, 2.2))
 
 // From http://filmicgames.com/archives/75
 // 色调映射函数：Uncharted 2游戏使用的HDR到LDR转换算法
@@ -285,20 +283,28 @@ float4 fragmentMain(VSOutput input)
     // 累积点光源贡献
     float3 Lo = float3(0.0, 0.0, 0.0);
     for (int i = 0; i < lightParameter.activePointLightCount; i++) {
-        // 计算表面点到光源的向量和距离
-        float3 lightDir = lightParameter.pointLights[i].position.xyz - input.WorldPos;
-        float distance = length(lightDir);
-        float3 L = normalize(lightDir);
+        if (lightParameter.pointLights[i].isRnder == 1)
+        {
+            // 计算表面点到光源的向量和距离
+            float3 lightDir = lightParameter.pointLights[i].position.xyz - input.WorldPos;
+            float distance = length(lightDir);
+            float3 L = normalize(lightDir);
 
-        // 计算衰减因子
-        float attenuation = calculateAttenuation(distance, lightParameter.pointLights[i].range, lightParameter.pointLights[i].attenuationMode);
+            // 计算阴影因子
+            const float EPSILON = 0.15;
+            float sampledDist = pointLightShadowCubeMap.Sample(float4(-L, i)).r;
+            float shadowFactor = (distance <= sampledDist + EPSILON) ? 1.0 : 0;
 
-        // 累加每个光源的贡献（已包含衰减）
-        Lo += specularContribution(albedoColor.rgb, lightParameter.pointLights[i].color.xyz, L, V, N, F0,  metallic, roughness, attenuation);
+            // 计算衰减因子
+            float attenuation = calculateAttenuation(distance, lightParameter.pointLights[i].range, lightParameter.pointLights[i].attenuationMode);
+
+            // 累加每个光源的贡献（已包含衰减）
+            Lo += shadowFactor * specularContribution(albedoColor.rgb, lightParameter.pointLights[i].color.xyz, L, V, N, F0,  metallic, roughness, attenuation);
+        }
     }
-
     uint cascadeIndex = 0;
     //计算定向光贡献
+    if (lightParameter.directLight.isRnder == 1)
     {
         // 获取级联阴影贴图级别
         for (uint i = 0; i < lightParameter.directLight.cascadeCount - 1; ++i) {
