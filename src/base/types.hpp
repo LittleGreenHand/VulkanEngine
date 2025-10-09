@@ -26,7 +26,7 @@ struct RenderPassInfo {
 	int32_t width = 0;
 	int32_t height = 0;
 	VkRenderPass renderPass{ VK_NULL_HANDLE };
-	VkFramebuffer frameBuffer{ VK_NULL_HANDLE };
+	std::vector<VkFramebuffer> frameBuffers;
 	std::vector<vks::Texture> colorAttachments;
 	vks::Texture depthAttachment;
 		
@@ -34,19 +34,13 @@ struct RenderPassInfo {
 	{
 		if (renderPass != VK_NULL_HANDLE)
 			vkDestroyRenderPass(device, renderPass, nullptr);
-		if (frameBuffer != VK_NULL_HANDLE)
+		for (auto& frameBuffer : frameBuffers)
 			vkDestroyFramebuffer(device, frameBuffer, nullptr);
 		for (auto& color : colorAttachments)
 			color.destroy();
 		colorAttachments.clear();
 		depthAttachment.destroy();
 	}
-};
-//RenderPass索引
-enum RenderPassesIndex {
-	RP_PointLight = 0,	//用于生成ShadowMap
-	RP_DirectLight,	//用于生成ShadowMap
-	RP_Count
 };
 
 struct PipelineInfo {

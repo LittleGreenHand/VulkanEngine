@@ -245,8 +245,8 @@ void VulkanEngine::prepare()
 	prepareUniformBuffers();
 	prepareDescriptors();
 	preparePipelines();
-	pointLights.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(false), &renderPasses[RP_PointLight]);
-	directLight.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(true), &renderPasses[RP_DirectLight]);
+	pointLights.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(false));
+	directLight.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(true));
 	prepared = true;
 }
 
@@ -421,8 +421,7 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 					{
 						vkDeviceWaitIdle(device);
 						pointLights.destroy();
-						renderPasses[RP_PointLight].destroy(device);
-						pointLights.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(false), &renderPasses[RP_PointLight]);
+						pointLights.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(false));
 					}
 				}
 				ImGui::Separator();

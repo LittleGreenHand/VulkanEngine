@@ -44,7 +44,6 @@ public:
 	std::map<GLTFModels, vkglTF::Model> models;
 	vkglTF::Model skybox;
 
-	std::array<RenderPassInfo, RP_Count> renderPasses{};
 	std::array<PipelineInfo, PL_Count> pipelines{};
 	std::array<VkDescriptorSetLayout, LBI_COUNT> setLayouts{};
 	VkDescriptorSet IBLDescriptorSet{ VK_NULL_HANDLE };
@@ -83,8 +82,6 @@ public:
 	~VulkanEngine()
 	{
 		vkLight::destroyLightBuffer();
-		pointLights.destroy();
-		directLight.destroy();
 		if (device) {
 			textures.environmentCube.destroy();
 			textures.irradianceCube.destroy();
@@ -105,10 +102,6 @@ public:
 					vkDestroyPipeline(device, pipeline.pipeline, nullptr);
 				if(pipeline.pipelineLayout != VK_NULL_HANDLE)
 					vkDestroyPipelineLayout(device, pipeline.pipelineLayout, nullptr);
-			}
-			for (auto& pass : renderPasses)
-			{
-				pass.destroy(device);
 			}
 			for (auto& layout : setLayouts)
 			{

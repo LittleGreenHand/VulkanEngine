@@ -170,8 +170,8 @@ namespace vkLight {
 		VkImageCreateInfo imageCreateInfo = vks::initializers::imageCreateInfo();
 		imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
 		imageCreateInfo.format = shadowCubeFormat;
-		imageCreateInfo.extent.width = renderPass->width;
-		imageCreateInfo.extent.height = renderPass->height;
+		imageCreateInfo.extent.width = renderPass.width;
+		imageCreateInfo.extent.height = renderPass.height;
 		imageCreateInfo.extent.depth = 1;
 		imageCreateInfo.mipLevels = 1;
 		imageCreateInfo.arrayLayers = 1;
@@ -200,39 +200,39 @@ namespace vkLight {
 		depthStencilView.subresourceRange.baseArrayLayer = 0;
 		depthStencilView.subresourceRange.layerCount = 1;
 
-		VK_CHECK_RESULT(vkCreateImage(device, &imageCreateInfo, nullptr, &renderPass->depthAttachment.image));
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)renderPass->depthAttachment.image, "PointLight DepthAttachment");
+		VK_CHECK_RESULT(vkCreateImage(device, &imageCreateInfo, nullptr, &renderPass.depthAttachment.image));
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)renderPass.depthAttachment.image, "PointLight DepthAttachment");
 		VkMemoryRequirements memReqs;
-		vkGetImageMemoryRequirements(device, renderPass->depthAttachment.image, &memReqs);
+		vkGetImageMemoryRequirements(device, renderPass.depthAttachment.image, &memReqs);
 
 		VkMemoryAllocateInfo memAlloc = vks::initializers::memoryAllocateInfo();
 		memAlloc.allocationSize = memReqs.size;
 		memAlloc.memoryTypeIndex = vulkanDevice->getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &renderPass->depthAttachment.deviceMemory));
-		VK_CHECK_RESULT(vkBindImageMemory(device, renderPass->depthAttachment.image, renderPass->depthAttachment.deviceMemory, 0));
+		VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &renderPass.depthAttachment.deviceMemory));
+		VK_CHECK_RESULT(vkBindImageMemory(device, renderPass.depthAttachment.image, renderPass.depthAttachment.deviceMemory, 0));
 
 		VkCommandBuffer layoutCmd = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 		vks::tools::setImageLayout(
 			layoutCmd,
-			renderPass->depthAttachment.image,
+			renderPass.depthAttachment.image,
 			VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
 			VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
 		vulkanDevice->flushCommandBuffer(layoutCmd, vkUtils::vkEngine->queue, true);
 
-		depthStencilView.image = renderPass->depthAttachment.image;
-		VK_CHECK_RESULT(vkCreateImageView(device, &depthStencilView, nullptr, &renderPass->depthAttachment.view));
-		renderPass->depthAttachment.device = vulkanDevice;
+		depthStencilView.image = renderPass.depthAttachment.image;
+		VK_CHECK_RESULT(vkCreateImageView(device, &depthStencilView, nullptr, &renderPass.depthAttachment.view));
+		renderPass.depthAttachment.device = vulkanDevice;
 		VkImageView attachments[2];
-		attachments[1] = renderPass->depthAttachment.view;
+		attachments[1] = renderPass.depthAttachment.view;
 
 		VkFramebufferCreateInfo fbufCreateInfo = vks::initializers::framebufferCreateInfo();
-		fbufCreateInfo.renderPass = renderPass->renderPass;
+		fbufCreateInfo.renderPass = renderPass.renderPass;
 		fbufCreateInfo.attachmentCount = 2;
 		fbufCreateInfo.pAttachments = attachments;
-		fbufCreateInfo.width = renderPass->width;
-		fbufCreateInfo.height = renderPass->height;
+		fbufCreateInfo.width = renderPass.width;
+		fbufCreateInfo.height = renderPass.height;
 		fbufCreateInfo.layers = 1;
 
 		for (int id = 0; id < lightData.activePointLightCount; ++id)
@@ -289,7 +289,7 @@ namespace vkLight {
 		renderPassCreateInfo.subpassCount = 1;
 		renderPassCreateInfo.pSubpasses = &subpass;
 
-		VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassCreateInfo, nullptr, &renderPass->renderPass));
+		VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassCreateInfo, nullptr, &renderPass.renderPass));
 	}
 	struct PushConstants {
 		glm::mat4 MVP;
@@ -313,7 +313,7 @@ namespace vkLight {
 		builder.addShaderStage(vkUtils::vkEngine->loadShader(vkUtils::vkEngine->getShadersPath() + "light_point.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
 		builder.addShaderStage(vkUtils::vkEngine->loadShader(vkUtils::vkEngine->getShadersPath() + "light_point.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
 		builder.setDepthStencilState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
-		builder.buildPipeline(renderPass->renderPass, vkUtils::vkEngine->pipelineCache, pipelineLayout, pipeline);
+		builder.buildPipeline(renderPass.renderPass, vkUtils::vkEngine->pipelineCache, pipelineLayout, pipeline);
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipeline, "DirectLightShadowMapGenerate pipeline");
 	}
 
@@ -342,10 +342,10 @@ namespace vkLight {
 
 		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-		VkViewport viewport = vks::initializers::viewport((float)renderPass->width, (float)renderPass->height, 0.0f, 1.0f);
+		VkViewport viewport = vks::initializers::viewport((float)renderPass.width, (float)renderPass.height, 0.0f, 1.0f);
 		vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
 
-		VkRect2D scissor = vks::initializers::rect2D(renderPass->width, renderPass->height, 0, 0);
+		VkRect2D scissor = vks::initializers::rect2D(renderPass.width, renderPass.height, 0, 0);
 		vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
 		VkClearValue clearValues[2];
@@ -354,9 +354,9 @@ namespace vkLight {
 
 		VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
 		// Reuse render pass from example pass
-		renderPassBeginInfo.renderPass = renderPass->renderPass;
-		renderPassBeginInfo.renderArea.extent.width = renderPass->width;
-		renderPassBeginInfo.renderArea.extent.height = renderPass->height;
+		renderPassBeginInfo.renderPass = renderPass.renderPass;
+		renderPassBeginInfo.renderArea.extent.width = renderPass.width;
+		renderPassBeginInfo.renderArea.extent.height = renderPass.height;
 		renderPassBeginInfo.clearValueCount = 2;
 		renderPassBeginInfo.pClearValues = clearValues;
 
@@ -366,6 +366,7 @@ namespace vkLight {
 			if (lightData.pointLights[id].isRnder)
 			{
 				glm::mat4 shadowProj = glm::perspective(glm::radians(90.0f), 1.0f, 0.001f, 1024.f);
+				//shadowProj[1][1] *= -1;
 				for (uint32_t face = 0; face < 6; face++)
 				{
 					int index = id * 6 + face;
@@ -375,7 +376,7 @@ namespace vkLight {
 					for (auto& [key, model] : vkUtils::vkEngine->models)
 					{
 						vkCmdPushConstants(cmdBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::mat4) * 2, sizeof(glm::vec4), &lightData.pointLights[id].position);
-						model.drawWithPushConstant(cmdBuffer, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pipelineLayout, shadowProj * viewMatrix[face], true);
+						model.drawWithPushConstant(cmdBuffer, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pipelineLayout, shadowProj * glm::translate(viewMatrix[face], glm::vec3(-lightData.pointLights[id].position)), true); 
 					}
 
 					vkCmdEndRenderPass(cmdBuffer);
@@ -484,14 +485,14 @@ namespace vkLight {
 
 	void VulkanDirectLights::prepareFramebuffer()
 	{
-		renderPass->width = shadowMapize;
-		renderPass->height = shadowMapize;
+		renderPass.width = shadowMapize;
+		renderPass.height = shadowMapize;
 
 		// For shadow mapping we only need a depth attachment
 		VkImageCreateInfo image = vks::initializers::imageCreateInfo();
 		image.imageType = VK_IMAGE_TYPE_2D;
-		image.extent.width = renderPass->width;
-		image.extent.height = renderPass->height;
+		image.extent.width = renderPass.width;
+		image.extent.height = renderPass.height;
 		image.extent.depth = 1;
 		image.mipLevels = 1;
 		image.arrayLayers = lightData.directLight.cascadeCount;
@@ -499,16 +500,16 @@ namespace vkLight {
 		image.tiling = VK_IMAGE_TILING_OPTIMAL;
 		image.format = shadowMapFormat;
 		image.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;		// We will sample directly from the depth attachment for the shadow mapping
-		VK_CHECK_RESULT(vkCreateImage(device, &image, nullptr, &renderPass->depthAttachment.image));
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)renderPass->depthAttachment.image, "DirectLightShadowTexture");
+		VK_CHECK_RESULT(vkCreateImage(device, &image, nullptr, &renderPass.depthAttachment.image));
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)renderPass.depthAttachment.image, "DirectLightShadowTexture");
 
 		VkMemoryAllocateInfo memAlloc = vks::initializers::memoryAllocateInfo();
 		VkMemoryRequirements memReqs;
-		vkGetImageMemoryRequirements(device, renderPass->depthAttachment.image, &memReqs);
+		vkGetImageMemoryRequirements(device, renderPass.depthAttachment.image, &memReqs);
 		memAlloc.allocationSize = memReqs.size;
 		memAlloc.memoryTypeIndex = vulkanDevice->getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &renderPass->depthAttachment.deviceMemory));
-		VK_CHECK_RESULT(vkBindImageMemory(device, renderPass->depthAttachment.image, renderPass->depthAttachment.deviceMemory, 0));
+		VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &renderPass.depthAttachment.deviceMemory));
+		VK_CHECK_RESULT(vkBindImageMemory(device, renderPass.depthAttachment.image, renderPass.depthAttachment.deviceMemory, 0));
 
 		VkImageViewCreateInfo depthStencilView = vks::initializers::imageViewCreateInfo();
 		depthStencilView.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
@@ -519,8 +520,8 @@ namespace vkLight {
 		depthStencilView.subresourceRange.levelCount = 1;
 		depthStencilView.subresourceRange.baseArrayLayer = 0;
 		depthStencilView.subresourceRange.layerCount = lightData.directLight.cascadeCount;
-		depthStencilView.image = renderPass->depthAttachment.image;
-		VK_CHECK_RESULT(vkCreateImageView(device, &depthStencilView, nullptr, &renderPass->depthAttachment.view));
+		depthStencilView.image = renderPass.depthAttachment.image;
+		VK_CHECK_RESULT(vkCreateImageView(device, &depthStencilView, nullptr, &renderPass.depthAttachment.view));
 
 		// Create sampler to sample from to depth attachment
 		// Used to sample in the fragment shader for shadowed rendering
@@ -537,8 +538,8 @@ namespace vkLight {
 		sampler.minLod = 0.0f;
 		sampler.maxLod = 1.0f;
 		sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-		VK_CHECK_RESULT(vkCreateSampler(device, &sampler, nullptr, &renderPass->depthAttachment.sampler));
-		renderPass->depthAttachment.device = vulkanDevice;
+		VK_CHECK_RESULT(vkCreateSampler(device, &sampler, nullptr, &renderPass.depthAttachment.sampler));
+		renderPass.depthAttachment.device = vulkanDevice;
 		preperRenderPass();
 
 		// One image view and framebuffer per cascade
@@ -554,15 +555,15 @@ namespace vkLight {
 			viewInfo.subresourceRange.levelCount = 1;
 			viewInfo.subresourceRange.baseArrayLayer = i;
 			viewInfo.subresourceRange.layerCount = 1;
-			viewInfo.image = renderPass->depthAttachment.image;
+			viewInfo.image = renderPass.depthAttachment.image;
 			VK_CHECK_RESULT(vkCreateImageView(device, &viewInfo, nullptr, &cascades[i].view));
 			// Framebuffer
 			VkFramebufferCreateInfo framebufferInfo = vks::initializers::framebufferCreateInfo();
-			framebufferInfo.renderPass = renderPass->renderPass;
+			framebufferInfo.renderPass = renderPass.renderPass;
 			framebufferInfo.attachmentCount = 1;
 			framebufferInfo.pAttachments = &cascades[i].view;
-			framebufferInfo.width = renderPass->width;
-			framebufferInfo.height = renderPass->height;
+			framebufferInfo.width = renderPass.width;
+			framebufferInfo.height = renderPass.height;
 			framebufferInfo.layers = 1;
 			VK_CHECK_RESULT(vkCreateFramebuffer(device, &framebufferInfo, nullptr, &cascades[i].frameBuffer));
 		}
@@ -570,10 +571,10 @@ namespace vkLight {
 		//更新描述符集
 		if (isDescriptorUpdated)
 		{
-			renderPass->depthAttachment.updateDescriptor();
-			renderPass->depthAttachment.descriptor.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+			renderPass.depthAttachment.updateDescriptor();
+			renderPass.depthAttachment.descriptor.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 			std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
-					vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &renderPass->depthAttachment.descriptor),
+					vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &renderPass.depthAttachment.descriptor),
 			};
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
 			isDescriptorUpdated = false;
@@ -630,7 +631,7 @@ namespace vkLight {
 		renderPassCreateInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
 		renderPassCreateInfo.pDependencies = dependencies.data();
 
-		VK_CHECK_RESULT(vkCreateRenderPass(vulkanDevice->logicalDevice, &renderPassCreateInfo, nullptr, &renderPass->renderPass));
+		VK_CHECK_RESULT(vkCreateRenderPass(vulkanDevice->logicalDevice, &renderPassCreateInfo, nullptr, &renderPass.renderPass));
 	}
 
 	void VulkanDirectLights::preperPipeline()
@@ -655,7 +656,7 @@ namespace vkLight {
 		builder.rasterizationState.depthBiasEnable = VK_TRUE;
 		builder.dynamicStateEnables.push_back(VK_DYNAMIC_STATE_DEPTH_BIAS); //向动态状态添加深度偏移，这样我们就能在运行时对其进行更改
 		builder.dynamicState = vks::initializers::pipelineDynamicStateCreateInfo(builder.dynamicStateEnables);
-		builder.buildPipeline(renderPass->renderPass, vkUtils::vkEngine->pipelineCache, pipelineLayout, pipeline);
+		builder.buildPipeline(renderPass.renderPass, vkUtils::vkEngine->pipelineCache, pipelineLayout, pipeline);
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipeline, "DirectLightShadowMapGenerate pipeline");
 	}
 
@@ -672,15 +673,15 @@ namespace vkLight {
 			clearValues[0].depthStencil = { 1.0f, 0 };
 
 			VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
-			renderPassBeginInfo.renderPass = renderPass->renderPass;
-			renderPassBeginInfo.renderArea.extent.width = renderPass->width;
-			renderPassBeginInfo.renderArea.extent.height = renderPass->height;
+			renderPassBeginInfo.renderPass = renderPass.renderPass;
+			renderPassBeginInfo.renderArea.extent.width = renderPass.width;
+			renderPassBeginInfo.renderArea.extent.height = renderPass.height;
 			renderPassBeginInfo.clearValueCount = 1;
 			renderPassBeginInfo.pClearValues = clearValues;
 
-			VkViewport viewport = vks::initializers::viewport((float)renderPass->width, (float)renderPass->height, 0.0f, 1.0f);
+			VkViewport viewport = vks::initializers::viewport((float)renderPass.width, (float)renderPass.height, 0.0f, 1.0f);
 			vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
-			VkRect2D scissor = vks::initializers::rect2D(renderPass->width, renderPass->height, 0, 0);
+			VkRect2D scissor = vks::initializers::rect2D(renderPass.width, renderPass.height, 0, 0);
 			vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
 			vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);

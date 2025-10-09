@@ -14,7 +14,7 @@ namespace vkLight
 	struct alignas(16) PointLightInfo {
 		glm::vec4 position;
 		glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 0.f);
-		float range = 10.0f;			//光源影响范围
+		float range = 15.0f;			//光源影响范围
 		int attenuationMode = 0;	//衰减模式 0:线性衰减 1:平方反比衰减 2:物理衰减
 		int isRnder = 1;
 	};
@@ -59,7 +59,7 @@ namespace vkLight
 		//是否需要更新描述符集
 		bool isDescriptorUpdated = true;
 		//此pass用于生成ShadowMap
-		RenderPassInfo* renderPass = nullptr;
+		RenderPassInfo renderPass;
 		// 阴影立方体贴图每个面的尺寸
 		const uint32_t shadowCubeSize{ 1024 };
 		// 阴影立方体贴图格式
@@ -95,17 +95,17 @@ namespace vkLight
 				}
 				vulkanDevice = nullptr;
 			}
-			renderPass = nullptr;
+			renderPass.destroy(device);
 		}
 
-		void prepare(vks::VulkanDevice* vulkanDevice, VkFormat depthFormat, RenderPassInfo* renderPass, bool isDescriptorUpdated = true)
+		void prepare(vks::VulkanDevice* vulkanDevice, VkFormat depthFormat, bool isDescriptorUpdated = true)
 		{
 			this->isDescriptorUpdated = isDescriptorUpdated;
 			this->vulkanDevice = vulkanDevice;
 			device = vulkanDevice->logicalDevice;
 			this->renderPass = renderPass;
-			renderPass->width = shadowCubeSize;
-			renderPass->height = shadowCubeSize;
+			renderPass.width = shadowCubeSize;
+			renderPass.height = shadowCubeSize;
 			shadowDepthFormat = depthFormat;
 			for (int id = 0; id < MAX_POINTLIGHTS * 6; ++id)
 			{
@@ -144,7 +144,7 @@ namespace vkLight
 		float depthBiasSlope = 0.f;
 		float cascadeSplitLambda = 0.75f;
 
-		RenderPassInfo* renderPass = nullptr;//此pass用于生成ShadowMap
+		RenderPassInfo renderPass;//此pass用于生成ShadowMap
 		VkFormat shadowMapFormat{ VK_FORMAT_D16_UNORM };//ShadowMap的格式
 		uint32_t shadowMapize{ 4096 };
 		struct Cascade {
@@ -179,16 +179,15 @@ namespace vkLight
 					cascades[i].destroy(vulkanDevice->logicalDevice);
 				vulkanDevice = nullptr;
 			}
-			renderPass = nullptr;
+			renderPass.destroy(device);
 		}
 		void updateCascades();
 
-		void prepare(vks::VulkanDevice* vulkanDevice, VkFormat depthFormat, RenderPassInfo* renderPass, bool isDescriptorUpdated = true)
+		void prepare(vks::VulkanDevice* vulkanDevice, VkFormat depthFormat, bool isDescriptorUpdated = true)
 		{
 			this->isDescriptorUpdated = isDescriptorUpdated;
 			this->vulkanDevice = vulkanDevice;
 			device = vulkanDevice->logicalDevice;
-			this->renderPass = renderPass;
 			shadowMapFormat = depthFormat;
 			prepareFramebuffer();
 			preperPipeline();
