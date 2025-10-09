@@ -16,7 +16,7 @@ namespace vkLight
 		glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 0.f);
 		float range = 15.0f;			//光源影响范围
 		int attenuationMode = 0;	//衰减模式 0:线性衰减 1:平方反比衰减 2:物理衰减
-		int isRnder = 1;
+		int isRnder = 0;
 	};
 	struct alignas(16) DirectLightInfo {
 		glm::vec4 direct = glm::vec4(0.f, 1.0f, 1.0f, 0.f);
@@ -29,7 +29,7 @@ namespace vkLight
 		int cascadeCount = 3; //实际使用的级联数量
 		int usePCF = 1;
 		int colorCascades = 0;
-		int isRnder = 1;
+		int isRnder = 0;
 
 	};
 	struct alignas(16) LightUbo {

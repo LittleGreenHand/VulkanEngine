@@ -511,6 +511,22 @@ namespace vkLight {
 		VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &renderPass.depthAttachment.deviceMemory));
 		VK_CHECK_RESULT(vkBindImageMemory(device, renderPass.depthAttachment.image, renderPass.depthAttachment.deviceMemory, 0));
 
+		VkCommandBuffer layoutCmd = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+		VkImageSubresourceRange subresourceRange = {};
+		subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+		subresourceRange.baseMipLevel = 0;
+		subresourceRange.levelCount = 1;
+		subresourceRange.layerCount = lightData.directLight.cascadeCount;
+		vks::tools::setImageLayout(
+			layoutCmd,
+			renderPass.depthAttachment.image,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+			subresourceRange);
+
+		vulkanDevice->flushCommandBuffer(layoutCmd, vkUtils::vkEngine->queue, true);
+		renderPass.depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+
 		VkImageViewCreateInfo depthStencilView = vks::initializers::imageViewCreateInfo();
 		depthStencilView.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
 		depthStencilView.format = shadowMapFormat;
