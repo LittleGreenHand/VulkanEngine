@@ -3,8 +3,8 @@
 #include "VulkanTexture.h"
 #include <glm/glm.hpp>
 
-//不同类型的描述符的set编号
-enum LayoutBindIndex {
+//描述符集在shader中的绑定索引，对应于types.slang中的声明
+enum DescriptorSetBindIndex {
 	LBI_GLOBAL = 0,
 	LBI_IBL,
 	LBI_LIGHTS,
@@ -44,8 +44,16 @@ struct RenderPassInfo {
 };
 
 struct PipelineInfo {
-	VkPipelineLayout pipelineLayout{ VK_NULL_HANDLE };
+	VkPipelineLayout layout{ VK_NULL_HANDLE };
 	VkPipeline pipeline{ VK_NULL_HANDLE };
+
+	void destroy(VkDevice device)
+	{
+		if (pipeline != VK_NULL_HANDLE)
+			vkDestroyPipeline(device, pipeline, nullptr);
+		if (layout != VK_NULL_HANDLE)
+			vkDestroyPipelineLayout(device, layout, nullptr);
+	}
 };
 //Pipeline索引
 enum PipelinesIndex {

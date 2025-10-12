@@ -1,3 +1,4 @@
+import types;
 #define MAX_CASCADES 8
 #define SHADOW_ATTENUATION_MIN 0
 struct PointLightInfo {
@@ -24,9 +25,9 @@ struct LightParameters
 
     DirectLightInfo directLight;
 };
-[[vk::binding(0, 2)]] ConstantBuffer<LightParameters> lightParameter;
-[[vk::binding(1, 2)]] Sampler2DArray directLightShadowMap;
-[[vk::binding(2, 2)]] SamplerCubeArray pointLightShadowCubeMap;
+[[vk::binding(0, LBI_LIGHTS)]] ConstantBuffer<LightParameters> lightParameter;
+[[vk::binding(1, LBI_LIGHTS)]] Sampler2DArray directLightShadowMap;
+[[vk::binding(2, LBI_LIGHTS)]] SamplerCubeArray pointLightShadowCubeMap;
 
 //计算定向光阴影
 float textureProj(float4 shadowCoord, float2 offset, uint cascadeIndex)

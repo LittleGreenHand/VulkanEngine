@@ -1,16 +1,94 @@
 #include "VulkanEngine.h"
 #include "VulkanUtil.h"
 #include "types.hpp"
+#include "PostProcessBase.h"
+#include "PipelineBuilder.h"
+#include "PostProcess_ToneMapping.h"
+VulkanEngine::~VulkanEngine()
+{
+	vkLight::destroyLightBuffer();
+	if (postProcessManager)
+	{
+		postProcessManager->destroyALL();
+		delete postProcessManager;
+		postProcessManager = nullptr;
+	}
+
+	if (device) {
+		textures.environmentCube.destroy();
+		textures.irradianceCube.destroy();
+		textures.prefilteredCube.destroy();
+		textures.lutBrdf.destroy();
+		textures.albedoMap.destroy();
+		textures.normalMap.destroy();
+		textures.aoMap.destroy();
+		textures.metallicMap.destroy();
+		textures.roughnessMap.destroy();
+		vkglTF::destroyEmptyTexture();
+		for (auto& buffer : globalParamBuffers) {
+			buffer.globalParamBuffer.destroy();
+		}
+		for (auto& pipeline : pipelines)
+		{
+			pipeline.destroy(device);
+		}
+		for (auto& layout : setLayouts)
+		{
+			vkDestroyDescriptorSetLayout(device, layout, nullptr);
+		}
+	}
+	PostProcessBase::cleanUp();
+}
+
+void VulkanEngine::prepare()
+{
+	VulkanEngineBase::prepare();
+	vkUtils::Init(this);
+	//初始化主渲染模块相关资源
+	{
+		loadAssets();
+		prepareUniformBuffers();
+		prepareDescriptors();
+		preparePipelines();
+	}
+	//初始化灯光资源
+	{
+		pointLights.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(false));
+		directLight.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(true));
+	}
+	preparePostProcess();
+	prepared = true;
+}
+
 void VulkanEngine::getEnabledFeatures()
 {
 	if (deviceFeatures.samplerAnisotropy) {
 		enabledFeatures.samplerAnisotropy = VK_TRUE;
-	}
+	}	
 	enabledFeatures.imageCubeArray = VK_TRUE;//启用立方体贴图数组
-	vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-	vulkan11Features.shaderDrawParameters = VK_TRUE;
 
-	deviceCreatepNextChain = &vulkan11Features;
+	Features11.shaderDrawParameters = VK_TRUE;//用于标识指示物理设备是否支持 "着色器绘制参数"，例如gl_DrawID、gl_InstanceID、gl_BaseVertex等
+
+	features12.bufferDeviceAddress = true; //允许应用程序获取缓冲区的设备地址（GPU可直接访问的内存地址），并在着色器中通过此地址直接访问缓冲区数据
+	features12.descriptorIndexing = true; //允许在着色器中动态索引描述符数组，着色器可以使用变量（而非编译期常量）作为索引访问描述符数组
+
+	features13.dynamicRendering = true; //启用动态渲染，这样可以减少对渲染通道（Render Pass）和帧缓冲（Framebuffer）的依赖
+	features13.synchronization2 = true; //用于标识物理设备是否支持Vulkan1.3引入的第二代同步机制，旨在简化同步逻辑、减少错误，并提供更精细的同步控制
+
+	Features11.pNext = &features12;
+	features12.pNext = &features13;
+	features13.pNext = nullptr;
+	deviceCreatepNextChain = &Features11;
+}
+
+void VulkanEngine::getEnabledExtensions()
+{	
+	enabledDeviceExtensions.push_back("VK_KHR_pipeline_library");
+	enabledDeviceExtensions.push_back("VK_EXT_graphics_pipeline_library");
+	libraryFeatures.graphicsPipelineLibrary = VK_TRUE;
+	libraryFeatures.pNext = deviceCreatepNextChain;
+
+	deviceCreatepNextChain = &libraryFeatures;
 }
 
 void VulkanEngine::loadAssets()
@@ -18,18 +96,14 @@ void VulkanEngine::loadAssets()
 	auto tStart = std::chrono::high_resolution_clock::now();
 
 	//加载纹理
-	textures.environmentCube.loadFromFile(getAssetPath() + "textures/hdr/gcanyon_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, true);
-	textures.albedoMap.loadFromFile(getAssetPath() + "models/cerberus/albedo.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
-	textures.normalMap.loadFromFile(getAssetPath() + "models/cerberus/normal.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
-	textures.aoMap.loadFromFile(getAssetPath() + "models/cerberus/ao.ktx", VK_FORMAT_R8_UNORM, vulkanDevice, queue);
-	textures.metallicMap.loadFromFile(getAssetPath() + "models/cerberus/metallic.ktx", VK_FORMAT_R8_UNORM, vulkanDevice, queue);
-	textures.roughnessMap.loadFromFile(getAssetPath() + "models/cerberus/roughness.ktx", VK_FORMAT_R8_UNORM, vulkanDevice, queue);
-	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.environmentCube.image, "environmentCube");
-	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.albedoMap.image, "albedoMap");
-	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.normalMap.image, "normalMap");
-	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.aoMap.image, "aoMap");
-	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.metallicMap.image, "metallicMap");
-	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.roughnessMap.image, "roughnessMap");
+	{
+		textures.environmentCube.loadFromFile(getAssetPath() + "textures/hdr/gcanyon_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, true);
+		textures.albedoMap.loadFromFile(getAssetPath() + "models/cerberus/albedo.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
+		textures.normalMap.loadFromFile(getAssetPath() + "models/cerberus/normal.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
+		textures.aoMap.loadFromFile(getAssetPath() + "models/cerberus/ao.ktx", VK_FORMAT_R8_UNORM, vulkanDevice, queue);
+		textures.metallicMap.loadFromFile(getAssetPath() + "models/cerberus/metallic.ktx", VK_FORMAT_R8_UNORM, vulkanDevice, queue);
+		textures.roughnessMap.loadFromFile(getAssetPath() + "models/cerberus/roughness.ktx", VK_FORMAT_R8_UNORM, vulkanDevice, queue);
+	}
 
 	//加载模型
 	{
@@ -81,6 +155,26 @@ void VulkanEngine::loadAssets()
 		skybox.loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, queue, glTFLoadingFlags);
 	}
 
+	//生成IBL贴图
+	{
+		vkUtils::generateBRDFLUT(textures.lutBrdf);
+		vkUtils::generateIrradianceCube(textures.irradianceCube, textures.environmentCube);
+		vkUtils::generatePrefilteredCube(textures.prefilteredCube, textures.environmentCube);
+	}
+
+	//设置调试名称
+	{
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)offscreenTexture[0].image, "offscreenTexture0");
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)offscreenTexture[1].image, "offscreenTexture1");
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.environmentCube.image, "environmentCube");
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.albedoMap.image, "albedoMap");
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.normalMap.image, "normalMap");
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.aoMap.image, "aoMap");
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.metallicMap.image, "metallicMap");
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.roughnessMap.image, "roughnessMap");
+		for (int i = 0; i < swapChain.images.size(); i++)
+			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)swapChain.images[i], ("swapchainImage" + std::to_string(i)));
+	}
 
 	auto tEnd = std::chrono::high_resolution_clock::now(); 
 	auto takeTime = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
@@ -124,15 +218,15 @@ void VulkanEngine::prepareDescriptors()
 	// 创建DescriptorSet
 	{
 		//全局参数
-		for (auto i = 0; i < frameDescriptorSets.size(); i++) {
+		for (auto i = 0; i < globalDescriptorSets.size(); i++) {
 			// 分配描述符集
 			VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &setLayouts[LBI_GLOBAL], 1);
-			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &frameDescriptorSets[i].globalParamDescriptorSet));
-			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)frameDescriptorSets[i].globalParamDescriptorSet, "frameDescriptorSets[" + std::to_string(i) + "].globalParamDescriptorSet ");
+			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &globalDescriptorSets[i]));
+			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)globalDescriptorSets[i], "frameDescriptorSets[" + std::to_string(i) + "].globalParamDescriptorSet ");
 
 			// 更新描述符集
 			std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
-				vks::initializers::writeDescriptorSet(frameDescriptorSets[i].globalParamDescriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &globalParamBuffers[i].globalParamBuffer.descriptor) };
+				vks::initializers::writeDescriptorSet(globalDescriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &globalParamBuffers[i].globalParamBuffer.descriptor) };
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
 		}
 
@@ -176,13 +270,13 @@ void VulkanEngine::preparePipelines()
 		setLayoutsVector[LBI_GLOBAL] = setLayouts[LBI_GLOBAL];
 		setLayoutsVector[LBI_IBL] = setLayouts[LBI_IBL];
 		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(setLayoutsVector);
-		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_Skybox].pipelineLayout));
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_Skybox].layout));
 
 		// Skybox pipeline
 		builder.rasterizationState.cullMode = VK_CULL_MODE_FRONT_BIT;
 		builder.addShaderStage(loadShader(getShadersPath() + "skybox.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
 		builder.addShaderStage(loadShader(getShadersPath() + "skybox.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
-		builder.buildPipeline(mainRenderPass, pipelineCache, pipelines[PL_Skybox].pipelineLayout, pipelines[PL_Skybox].pipeline);
+		builder.buildPipeline(mainRenderPass.renderPass, pipelineCache, pipelines[PL_Skybox].layout, pipelines[PL_Skybox].pipeline);
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_Skybox].pipeline, "skybox pipeline");
 	}
 
@@ -197,15 +291,15 @@ void VulkanEngine::preparePipelines()
 		setLayoutsVector[LBI_MATERIALS] = setLayouts[LBI_MATERIALS];
 		setLayoutsVector[LBI_MESH] = setLayouts[LBI_MESH];
 		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(setLayoutsVector);
-		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_PBR].pipelineLayout));
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_PBR].layout));
 
 		builder.rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
 		//启用深度测试与写入
 		builder.depthStencilState.depthWriteEnable = VK_TRUE;
 		builder.depthStencilState.depthTestEnable = VK_TRUE;
-		builder.addShaderStage(loadShader(getShadersPath() + "PBRRender.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
-		builder.addShaderStage(loadShader(getShadersPath() + "PBRRender.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
-		builder.buildPipeline(mainRenderPass, pipelineCache, pipelines[PL_PBR].pipelineLayout, pipelines[PL_PBR].pipeline);
+		builder.addShaderStage(loadShader(getShadersPath() + "PBR_Render.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
+		builder.addShaderStage(loadShader(getShadersPath() + "PBR_Render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
+		builder.buildPipeline(mainRenderPass.renderPass, pipelineCache, pipelines[PL_PBR].layout, pipelines[PL_PBR].pipeline);
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_PBR].pipeline, "PBRRender pipeline");
 	}
 
@@ -234,20 +328,14 @@ void VulkanEngine::updateUniformBuffers()
 	memcpy(globalParamBuffers[currentBuffer].globalParamBuffer.mapped, &globalParam, sizeof(GlobalParams));
 }
 
-void VulkanEngine::prepare()
+void VulkanEngine::preparePostProcess() 
 {
-	VulkanEngineBase::prepare();
-	vkUtils::Init(this);
-	loadAssets();
-	vkUtils::generateBRDFLUT(textures.lutBrdf);
-	vkUtils::generateIrradianceCube(textures.irradianceCube, textures.environmentCube);
-	vkUtils::generatePrefilteredCube(textures.prefilteredCube, textures.environmentCube);
-	prepareUniformBuffers();
-	prepareDescriptors();
-	preparePipelines();
-	pointLights.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(false));
-	directLight.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(true));
-	prepared = true;
+	PostProcessBase::preparePostProcessBase(vulkanDevice);
+	if (!postProcessManager)
+	{
+		postProcessManager = new PostProcessManager();
+		postProcessManager->prepare();
+	}
 }
 
 void VulkanEngine::buildCommandBuffer()
@@ -268,14 +356,14 @@ void VulkanEngine::buildCommandBuffer()
 	clearValues[2].color = { {0.0f, 0.0f, 0.0f, 0.0f} };
 
 	VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
-	renderPassBeginInfo.renderPass = mainRenderPass;
+	renderPassBeginInfo.renderPass = mainRenderPass.renderPass;
 	renderPassBeginInfo.renderArea.offset.x = 0;
 	renderPassBeginInfo.renderArea.offset.y = 0;
 	renderPassBeginInfo.renderArea.extent.width = width;
 	renderPassBeginInfo.renderArea.extent.height = height;
 	renderPassBeginInfo.clearValueCount = 3;
 	renderPassBeginInfo.pClearValues = clearValues;
-	renderPassBeginInfo.framebuffer = frameBuffers[currentImageIndex];
+	renderPassBeginInfo.framebuffer = mainRenderPass.frameBuffers[0];
 
 	const VkViewport viewport = vks::initializers::viewport((float)width, (float)height, 0.0f, 1.0f);
 	const VkRect2D scissor = vks::initializers::rect2D(width, height, 0, 0);
@@ -286,7 +374,7 @@ void VulkanEngine::buildCommandBuffer()
 
 	const int descriptorSetCount = 3;
 	std::vector<VkDescriptorSet> descriptorSetsArray(descriptorSetCount);
-	descriptorSetsArray[LBI_GLOBAL] = frameDescriptorSets[currentBuffer].globalParamDescriptorSet;
+	descriptorSetsArray[LBI_GLOBAL] = globalDescriptorSets[currentBuffer];
 	descriptorSetsArray[LBI_IBL] = IBLDescriptorSet;
 	descriptorSetsArray[LBI_LIGHTS] = vkLight::descriptorSet;
 	// Skybox
@@ -294,7 +382,7 @@ void VulkanEngine::buildCommandBuffer()
 	{
 		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline skybox", { 1.0f, 1.0f, 1.0f });
 		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_Skybox].pipeline);
-		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_Skybox].pipelineLayout, 0, 2, descriptorSetsArray.data(), 0, nullptr);
+		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_Skybox].layout, 0, 2, descriptorSetsArray.data(), 0, nullptr);
 		skybox.draw(cmdBuffer);//不需要绑定材质描述符集
 		vkUtils::cmdEndLabel(cmdBuffer);
 	}
@@ -303,18 +391,41 @@ void VulkanEngine::buildCommandBuffer()
 	{
 		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline PBR", { 1.0f, 1.0f, 1.0f });
 		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR].pipeline);
-		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR].pipelineLayout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
+		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
 
 		for (auto& [key, model] : models)
 		{
-			model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines[PL_PBR].pipelineLayout);
+			model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines[PL_PBR].layout);
 		}
 		vkUtils::cmdEndLabel(cmdBuffer);
 	}
 
-	// UI
-	drawUI(cmdBuffer);
 	vkCmdEndRenderPass(cmdBuffer);
+
+	//后处理
+	{
+		PostProcessBase::update(width, height);
+		vkUtils::transitionImageLayout(cmdBuffer, offscreenTexture[0].image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		offscreenTexture[0].descriptor.imageLayout = offscreenTexture[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		vkUtils::transitionImageLayout(cmdBuffer, swapChain.images[currentImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+		postProcessManager->toneMappingProcess->excute(cmdBuffer, offscreenTexture[0].descriptor, swapChain.imageViews[currentImageIndex]);
+
+		vkUtils::transitionImageLayout(cmdBuffer, swapChain.images[currentImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	}
+
+	// UI
+	{
+		vkUtils::cmdBeginLabel(cmdBuffer, "ImGUI", { 1.0f, 1.0f, 1.0f });
+		VkRenderingAttachmentInfo colorAttachment = vks::initializers::RenderingAttachmentInfo_Color(swapChain.imageViews[currentImageIndex], nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		VkRenderingInfo renderInfo = vks::initializers::RenderingInfo({ width, height }, &colorAttachment, nullptr);
+		vkCmdBeginRendering(cmdBuffer, &renderInfo);
+		vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
+		vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
+		drawUI(cmdBuffer);
+		vkCmdEndRendering(cmdBuffer);
+		vkUtils::cmdEndLabel(cmdBuffer);
+	}
 	VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuffer));
 }
 

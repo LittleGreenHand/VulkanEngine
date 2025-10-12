@@ -1,5 +1,6 @@
 #include "VulkanLights.h"
 #include "VulkanUtil.h"
+#include "PipelineBuilder.h"
 
 VkDescriptorSetLayout vkLight::descriptorSetLayout{ VK_NULL_HANDLE };
 VkDescriptorSet vkLight::descriptorSet{ VK_NULL_HANDLE };

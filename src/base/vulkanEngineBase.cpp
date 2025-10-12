@@ -219,6 +219,7 @@ void VulkanEngineBase::prepare()
 	createSwapChain();
 	createCommandBuffers();
 	createSynchronizationPrimitives();
+	setupOffscreenAttachment();
 	setupDepthStencil();
 	setupRenderPass();
 	createPipelineCache();
@@ -233,7 +234,7 @@ void VulkanEngineBase::prepare()
 			loadShader(getShadersPath() + "uioverlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT),
 		};
 		uiOverlay.prepareResources();
-		uiOverlay.preparePipeline(pipelineCache, mainRenderPass, swapChain.colorFormat, depthFormat);
+		uiOverlay.preparePipeline(pipelineCache, VK_NULL_HANDLE, swapChain.colorFormat, depthFormat);
 	}
 }
 
@@ -900,15 +901,10 @@ VulkanEngineBase::~VulkanEngineBase()
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 	}
 	destroyCommandBuffers();
-	if (mainRenderPass != VK_NULL_HANDLE)
-	{
-		vkDestroyRenderPass(device, mainRenderPass, nullptr);
+	mainRenderPass.destroy(device);
+	for (auto& offscreenTex : offscreenTexture) {
+		offscreenTex.destroy();
 	}
-	for (auto& frameBuffer : frameBuffers)
-	{
-		vkDestroyFramebuffer(device, frameBuffer, nullptr);
-	}
-
 	for (auto& shaderModule : shaderModules)
 	{
 		vkDestroyShaderModule(device, shaderModule, nullptr);
@@ -2979,6 +2975,19 @@ void VulkanEngineBase::createCommandPool()
 	VK_CHECK_RESULT(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &cmdPool));
 }
 
+void VulkanEngineBase::setupOffscreenAttachment()
+{
+	for (auto& offscreenTex : offscreenTexture) {
+		offscreenTex.device = vulkanDevice;
+		offscreenTex.format = offscreenFormat;
+		offscreenTex.width = width;
+		offscreenTex.height = height;
+		offscreenTex.mipLevels = 1;
+		offscreenTex.layerCount = 1;
+		vulkanDevice->createColorImage(offscreenTex);
+	}
+}
+
 void VulkanEngineBase::setupDepthStencil()
 {
 	VkImageCreateInfo imageCI{};
@@ -3022,24 +3031,21 @@ void VulkanEngineBase::setupDepthStencil()
 
 void VulkanEngineBase::setupFrameBuffer()
 {
-	// Create frame buffers for every swap chain image
-	frameBuffers.resize(swapChain.images.size());
-	for (uint32_t i = 0; i < frameBuffers.size(); i++)
+	//为离屏渲染创建帧缓冲
 	{
-		const VkImageView attachments[2] = {
-			swapChain.imageViews[i],
-			// Depth/Stencil attachment is the same for all frame buffers
-			depthStencil.view
-		};
+		mainRenderPass.frameBuffers.resize(1);
+		mainRenderPass.width = width;
+		mainRenderPass.height = height;
+		const VkImageView attachments[2] = { offscreenTexture[0].view,	depthStencil.view };
 		VkFramebufferCreateInfo frameBufferCreateInfo{};
 		frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		frameBufferCreateInfo.renderPass = mainRenderPass;
+		frameBufferCreateInfo.renderPass = mainRenderPass.renderPass;
 		frameBufferCreateInfo.attachmentCount = 2;
 		frameBufferCreateInfo.pAttachments = attachments;
 		frameBufferCreateInfo.width = width;
 		frameBufferCreateInfo.height = height;
 		frameBufferCreateInfo.layers = 1;
-		VK_CHECK_RESULT(vkCreateFramebuffer(device, &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
+		VK_CHECK_RESULT(vkCreateFramebuffer(device, &frameBufferCreateInfo, nullptr, &mainRenderPass.frameBuffers[0]));
 	}
 }
 
@@ -3047,14 +3053,14 @@ void VulkanEngineBase::setupRenderPass()
 {
 	std::array<VkAttachmentDescription, 2> attachments = {};
 	// Color attachment
-	attachments[0].format = swapChain.colorFormat;
+	attachments[0].format = offscreenFormat;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
 	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 	// Depth attachment
 	attachments[1].format = depthFormat;
 	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -3112,7 +3118,7 @@ void VulkanEngineBase::setupRenderPass()
 	renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
 	renderPassInfo.pDependencies = dependencies.data();
 
-	VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &mainRenderPass));
+	VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &mainRenderPass.renderPass));
 }
 
 void VulkanEngineBase::getEnabledFeatures() {}
@@ -3140,8 +3146,12 @@ void VulkanEngineBase::windowResize()
 	vkDestroyImageView(device, depthStencil.view, nullptr);
 	vkDestroyImage(device, depthStencil.image, nullptr);
 	vkFreeMemory(device, depthStencil.memory, nullptr);
+	for (auto& offscreenTex : offscreenTexture) {
+		offscreenTex.destroy();
+	}
+	setupOffscreenAttachment();
 	setupDepthStencil();
-	for (auto& frameBuffer : frameBuffers) {
+	for (auto& frameBuffer : mainRenderPass.frameBuffers) {
 		vkDestroyFramebuffer(device, frameBuffer, nullptr);
 	}
 	setupFrameBuffer();

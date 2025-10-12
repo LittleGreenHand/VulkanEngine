@@ -1,4 +1,5 @@
 import "Binding_Global.slang";
+import "Binding_IBL.slang";
 import "Binding_Light.slang";
 import "Binding_Material.slang";
 import "Binding_Mesh.slang";
@@ -15,20 +16,6 @@ struct VSOutput
 };
 
 #define PI 3.1415926535897932384626433832795
-
-// From http://filmicgames.com/archives/75
-// 色调映射函数：Uncharted 2游戏使用的HDR到LDR转换算法
-// 作用是将高动态范围的渲染结果压缩到适合显示器的低动态范围
-float3 Uncharted2Tonemap(float3 x)
-{
-	float A = 0.15;
-	float B = 0.50;
-	float C = 0.10;
-	float D = 0.20;
-	float E = 0.02;
-	float F = 0.30;
-	return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
-}
 
 // 法线分布函数(D)：GGX模型
 // 描述微平面的朝向分布，决定高光的形状和集中度
@@ -357,16 +344,10 @@ float4 fragmentMain(VSOutput input)
     float3 ambient = (kD * diffuse + specular) * ao;
 
     float3 color = ambient + Lo + emission;
-
-    // 应用色调映射（HDR → LDR转换）
-    color = Uncharted2Tonemap(color * globalParams.exposure);
-    color = color * (1.0f / Uncharted2Tonemap((11.2f).xxx));
-    // 应用伽马校正（线性空间 → sRGB空间）
-    color = pow(color, (1.0f / globalParams.gamma).xxx);
-
+    
     if (lightParameter.directLight.colorCascades == 1) {
         color *= getCascadeColor(cascadeIndex);
     }
-
+    
     return float4(color, albedoColor.a);
 }

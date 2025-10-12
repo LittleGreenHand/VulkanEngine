@@ -66,6 +66,7 @@ public:
 
     // 构建图形管线
     VkResult buildPipeline(VkRenderPass& renderPass, VkPipelineCache& pipelineCache, VkPipelineLayout& pipelineLayout, VkPipeline& outPipeline);
+    VkResult buildPipeline(VkPipelineRenderingCreateInfo renderInfo, VkPipelineCache pipelineCache, VkPipelineLayout& pipelineLayout, VkPipeline& outPipeline);
 
     // 重置构建器状态，用于创建新的管线
     void reset();

@@ -12,13 +12,14 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-
+#include <map>
 #include <vulkan/vulkan.h>
 #include "vulkanEngineBase.h"
 #include "VulkanglTFModel.h"
-#include "PipelineBuilder.h"
 #include "VulkanLights.h"
-#include "types.hpp"
+
+//前向声明
+class PostProcessManager;
 
 class VulkanEngine : public VulkanEngineBase
 {
@@ -26,6 +27,7 @@ public:
 	bool displaySkybox = true;
 	vkLight::VulkanPointLights pointLights;
 	vkLight::VulkanDirectLights directLight;
+	PostProcessManager* postProcessManager = nullptr;
 
 	struct Textures {
 		vks::TextureCubeMap environmentCube;
@@ -60,13 +62,15 @@ public:
 		vks::Buffer globalParamBuffer;
 	};
 	std::array<UniformBuffers, maxConcurrentFrames> globalParamBuffers;
-	struct Descriptor {
-		VkDescriptorSet globalParamDescriptorSet{ VK_NULL_HANDLE };
-	};
-	std::array<Descriptor, maxConcurrentFrames> frameDescriptorSets{};
 
-	VkPhysicalDeviceVulkan11Features vulkan11Features{};
+	//每帧独立使用的全局参数的描述符集
+	std::array<VkDescriptorSet, maxConcurrentFrames> globalDescriptorSets{};
 
+	VkPhysicalDeviceVulkan11Features Features11{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
+	VkPhysicalDeviceVulkan12Features features12{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+	VkPhysicalDeviceVulkan13Features features13{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
+
+	VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT libraryFeatures{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT };
 	VulkanEngine() : VulkanEngineBase()
 	{
 		title = "VulkanEngine";
@@ -79,43 +83,16 @@ public:
 		camera.setPosition({ 0.f, 0.f, 0.f });
 	}
 
-	~VulkanEngine()
-	{
-		vkLight::destroyLightBuffer();
-		if (device) {
-			textures.environmentCube.destroy();
-			textures.irradianceCube.destroy();
-			textures.prefilteredCube.destroy();
-			textures.lutBrdf.destroy();
-			textures.albedoMap.destroy();
-			textures.normalMap.destroy();
-			textures.aoMap.destroy();
-			textures.metallicMap.destroy();
-			textures.roughnessMap.destroy();
-			vkglTF::destroyEmptyTexture();
-			for (auto& buffer : globalParamBuffers) {
-				buffer.globalParamBuffer.destroy();
-			}
-			for(auto& pipeline : pipelines)
-			{
-				if(pipeline.pipeline != VK_NULL_HANDLE)
-					vkDestroyPipeline(device, pipeline.pipeline, nullptr);
-				if(pipeline.pipelineLayout != VK_NULL_HANDLE)
-					vkDestroyPipelineLayout(device, pipeline.pipelineLayout, nullptr);
-			}
-			for (auto& layout : setLayouts)
-			{
-				vkDestroyDescriptorSetLayout(device, layout, nullptr);
-			}
-		}
-	}
+	~VulkanEngine();
 
 	virtual void getEnabledFeatures() override;
+	virtual void getEnabledExtensions() override;
 	void buildCommandBuffer();
 	void loadAssets();
 	void prepareDescriptors();
 	void preparePipelines();
 	void prepareUniformBuffers();
+	void preparePostProcess();
 	void updateUniformBuffers();
 	//初始化引擎各类资源
 	void prepare() override;

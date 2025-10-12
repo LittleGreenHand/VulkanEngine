@@ -13,8 +13,8 @@ void VulkanRaytracingSample::setupRenderPass()
 	// Update the default render pass with different color attachment load ops to keep attachment contents
 	// With this change, we can e.g. draw an UI on top of the ray traced scene
 
-	vkDestroyRenderPass(device, mainRenderPass, nullptr);
-
+	//vkDestroyRenderPass(device, mainRenderPass, nullptr);
+	mainRenderPass.destroy(device);
 	VkAttachmentLoadOp colorLoadOp{ VK_ATTACHMENT_LOAD_OP_LOAD };
 	VkImageLayout colorInitialLayout{ VK_IMAGE_LAYOUT_PRESENT_SRC_KHR };
 	
@@ -90,7 +90,7 @@ void VulkanRaytracingSample::setupRenderPass()
 	renderPassInfo.pSubpasses = &subpassDescription;
 	renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
 	renderPassInfo.pDependencies = dependencies.data();
-	VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &mainRenderPass));
+	VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &mainRenderPass.renderPass));
 }
 
 void VulkanRaytracingSample::setupFrameBuffer()
@@ -102,18 +102,20 @@ void VulkanRaytracingSample::setupFrameBuffer()
 
 	VkFramebufferCreateInfo frameBufferCreateInfo{};
 	frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-	frameBufferCreateInfo.renderPass = mainRenderPass;
+	frameBufferCreateInfo.renderPass = mainRenderPass.renderPass;
 	frameBufferCreateInfo.attachmentCount = 2;
 	frameBufferCreateInfo.pAttachments = attachments;
 	frameBufferCreateInfo.width = width;
 	frameBufferCreateInfo.height = height;
 	frameBufferCreateInfo.layers = 1;
 
+	mainRenderPass.width = width;
+	mainRenderPass.height = height;
 	// Create frame buffers for every swap chain image
-	frameBuffers.resize(swapChain.images.size());
-	for (uint32_t i = 0; i < frameBuffers.size(); i++) {
+	mainRenderPass.frameBuffers.resize(swapChain.images.size());
+	for (uint32_t i = 0; i < mainRenderPass.frameBuffers.size(); i++) {
 		attachments[0] = swapChain.imageViews[i];
-		VK_CHECK_RESULT(vkCreateFramebuffer(device, &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
+		VK_CHECK_RESULT(vkCreateFramebuffer(device, &frameBufferCreateInfo, nullptr, &mainRenderPass.frameBuffers[i]));
 	}
 }
 
@@ -346,7 +348,7 @@ void VulkanRaytracingSample::drawUI(VkCommandBuffer commandBuffer, VkFramebuffer
 	clearValues[1].depthStencil = { 1.0f, 0 };
 
 	VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
-	renderPassBeginInfo.renderPass = mainRenderPass;
+	renderPassBeginInfo.renderPass = mainRenderPass.renderPass;
 	renderPassBeginInfo.renderArea.offset.x = 0;
 	renderPassBeginInfo.renderArea.offset.y = 0;
 	renderPassBeginInfo.renderArea.extent.width = width;

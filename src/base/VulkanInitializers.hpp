@@ -11,12 +11,73 @@
 #pragma once
 
 #include <vector>
+#include <span>
 #include "vulkan/vulkan.h"
 
 namespace vks
 {
 	namespace initializers
 	{
+		inline VkRenderingAttachmentInfo RenderingAttachmentInfo_Color(
+			VkImageView view, VkClearValue* clear = nullptr, VkImageLayout layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+		{
+			VkRenderingAttachmentInfo colorAttachment{};
+			colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+			colorAttachment.pNext = nullptr;
+			colorAttachment.imageView = view; //指定用作附件的图像视图
+			colorAttachment.imageLayout = layout;//指定附件图像在渲染期间的布局
+
+			//loadOp：指定渲染开始时的加载操作
+			//VK_ATTACHMENT_LOAD_OP_LOAD: 保留现有内容
+			//VK_ATTACHMENT_LOAD_OP_CLEAR : 清除附件
+			//VK_ATTACHMENT_LOAD_OP_DONT_CARE : 不关心现有内容
+			colorAttachment.loadOp = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+
+			//storeOp: 指定渲染结束时的存储操作
+			//VK_ATTACHMENT_STORE_OP_STORE : 保存渲染结果
+			//VK_ATTACHMENT_STORE_OP_DONT_CARE : 不保存结果
+			colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+			if (clear) {
+				//当 loadOp 为 VK_ATTACHMENT_LOAD_OP_CLEAR 时使用的清除值
+				//对于颜色附件，使用 color 成员
+				//对于深度/模板附件，使用 depthStencil 成员
+				colorAttachment.clearValue = *clear;
+			}
+
+			return colorAttachment;
+		}
+
+		inline VkRenderingAttachmentInfo RenderingAttachmentInfo_Depth(VkImageView view, VkImageLayout layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+		{
+			VkRenderingAttachmentInfo depthAttachment{};
+			depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+			depthAttachment.pNext = nullptr;
+			depthAttachment.imageView = view;
+			depthAttachment.imageLayout = layout;
+			depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;//每次渲染前重置深度缓冲
+			depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;//保留渲染后的深度数据（若不需要后续使用可设为DONT_CARE）
+			depthAttachment.clearValue.depthStencil.depth = 0.f;
+			depthAttachment.clearValue.depthStencil.stencil = 0;
+			return depthAttachment;
+		}
+
+		inline VkRenderingInfo RenderingInfo(VkExtent2D renderExtent, VkRenderingAttachmentInfo* colorAttachment,
+			VkRenderingAttachmentInfo* depthAttachment)
+		{
+			VkRenderingInfo renderInfo{};
+			renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+			renderInfo.pNext = nullptr;
+
+			renderInfo.renderArea = VkRect2D{ VkOffset2D { 0, 0 }, renderExtent };
+			renderInfo.layerCount = 1;
+			renderInfo.colorAttachmentCount = 1;
+			renderInfo.pColorAttachments = colorAttachment;
+			renderInfo.pDepthAttachment = depthAttachment;
+			renderInfo.pStencilAttachment = depthAttachment;
+
+			return renderInfo;
+		}
 
 		inline VkMemoryAllocateInfo memoryAllocateInfo()
 		{
@@ -291,7 +352,7 @@ namespace vks
 		}
 
 		inline VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo(
-			const std::vector<VkDescriptorSetLayout>& pSetLayouts)
+			const std::span<VkDescriptorSetLayout>& pSetLayouts)
 		{
 			VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo {};
 			pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -307,6 +368,16 @@ namespace vks
 			pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 			pipelineLayoutCreateInfo.setLayoutCount = setLayoutCount;
 			return pipelineLayoutCreateInfo;
+		}
+
+		inline VkPipelineRenderingCreateInfo pipelineRenderingCreateInfo(
+			uint32_t colorAttachmentCount, VkFormat* colorFormat)
+		{
+			VkPipelineRenderingCreateInfo pipelineRenderingCreateInfo{};
+			pipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+			pipelineRenderingCreateInfo.colorAttachmentCount = colorAttachmentCount;
+			pipelineRenderingCreateInfo.pColorAttachmentFormats = colorFormat;
+			return pipelineRenderingCreateInfo;
 		}
 
 		inline VkDescriptorSetAllocateInfo descriptorSetAllocateInfo(
@@ -661,6 +732,16 @@ namespace vks
 			VkWriteDescriptorSetAccelerationStructureKHR writeDescriptorSetAccelerationStructureKHR{};
 			writeDescriptorSetAccelerationStructureKHR.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
 			return writeDescriptorSetAccelerationStructureKHR;
+		}
+		inline VkImageSubresourceRange ImageSubresourceRange(VkImageAspectFlags aspectMask)
+		{
+			VkImageSubresourceRange subImage{};
+			subImage.aspectMask = aspectMask;//图像平面类型（颜色/深度/模板等）
+			subImage.baseMipLevel = 0;//起始Mipmap层级
+			subImage.levelCount = VK_REMAINING_MIP_LEVELS;//影响的Mip层级数量
+			subImage.baseArrayLayer = 0;//起始数组层
+			subImage.layerCount = VK_REMAINING_ARRAY_LAYERS;//影响的数组层数量
+			return subImage;
 		}
 
 	}

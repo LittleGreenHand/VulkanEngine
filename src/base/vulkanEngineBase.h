@@ -72,6 +72,7 @@
 #include "VulkanInitializers.hpp"
 #include "camera.hpp"
 #include "benchmark.hpp"
+#include "types.hpp"
 
 constexpr uint32_t maxConcurrentFrames{ 2 };
 
@@ -129,10 +130,10 @@ public:
 	VkCommandPool cmdPool{ VK_NULL_HANDLE };
 	// Command buffers used for rendering
 	std::array<VkCommandBuffer, maxConcurrentFrames> drawCmdBuffers;
-	// Global render pass for frame buffer writes
-	VkRenderPass mainRenderPass{ VK_NULL_HANDLE };
-	// List of available frame buffers (same as number of swap chain images)
-	std::vector<VkFramebuffer>frameBuffers;
+	//主渲染Pass，包含渲染目标和深度模板缓冲
+	RenderPassInfo mainRenderPass;
+	//// List of available frame buffers (same as number of swap chain images)
+	//std::vector<VkFramebuffer>frameBuffers;
 	// Descriptor set pool
 	VkDescriptorPool descriptorPool{ VK_NULL_HANDLE };
 	// List of shader modules created (stored for cleanup)
@@ -213,6 +214,8 @@ public:
 	std::string name = "vulkanExample";
 	uint32_t apiVersion = VK_API_VERSION_1_4;
 
+	std::array<vks::Texture, 2> offscreenTexture;
+	VkFormat offscreenFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 	/** @brief Default depth stencil attachment used by the default render pass */
 	struct {
 		VkImage image;
@@ -351,6 +354,8 @@ public:
 	virtual void mouseMoved(double x, double y, bool &handled);
 	/** @brief (Virtual) Called when the window has been resized, can be used by the sample application to recreate resources */
 	virtual void windowResized();
+	/** @brief (Virtual) 创建离屏渲染目标 */
+	virtual void setupOffscreenAttachment();
 	/** @brief (Virtual) Setup default depth and stencil views */
 	virtual void setupDepthStencil();
 	/** @brief (Virtual) Setup default framebuffers for all requested swapchain images */

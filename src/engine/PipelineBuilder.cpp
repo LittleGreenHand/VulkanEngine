@@ -105,6 +105,35 @@ VkResult PipelineBuilder::buildPipeline(VkRenderPass& renderPass, VkPipelineCach
     );
 }
 
+VkResult PipelineBuilder::buildPipeline(VkPipelineRenderingCreateInfo renderInfo, VkPipelineCache pipelineCache, VkPipelineLayout& pipelineLayout, VkPipeline& outPipeline) {
+    // 准备管线创建信息
+    VkGraphicsPipelineCreateInfo pipelineCI = vks::initializers::pipelineCreateInfo();
+
+    // 设置所有管线状态
+    pipelineCI.pInputAssemblyState = &inputAssemblyState;
+    pipelineCI.pRasterizationState = &rasterizationState;
+    pipelineCI.pColorBlendState = &colorBlendState;
+    pipelineCI.pMultisampleState = &multisampleState;
+    pipelineCI.pViewportState = &viewportState;
+    pipelineCI.pDepthStencilState = &depthStencilState;
+    pipelineCI.pDynamicState = &dynamicState;
+    pipelineCI.stageCount = static_cast<uint32_t>(shaderStages.size());
+    pipelineCI.pStages = shaderStages.data();
+    pipelineCI.pVertexInputState = vertexInputState;
+    pipelineCI.layout = pipelineLayout;
+	pipelineCI.pNext = &renderInfo;
+
+    // 创建管线
+    return vkCreateGraphicsPipelines(
+        device,
+        pipelineCache,
+        1,
+        &pipelineCI,
+        nullptr,
+        &outPipeline
+    );
+}
+
 void PipelineBuilder::reset() {
     // 重置所有状态为默认值
     setInputAssemblyState();

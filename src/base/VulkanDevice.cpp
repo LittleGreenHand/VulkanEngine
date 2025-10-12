@@ -14,6 +14,7 @@
 #endif
 #include <VulkanDevice.h>
 #include <unordered_set>
+#include "VulkanTexture.h"
 
 namespace vks
 {	
@@ -449,6 +450,57 @@ namespace vks
 		vkCmdCopyBuffer(copyCmd, src->buffer, dst->buffer, 1, &bufferCopy);
 
 		flushCommandBuffer(copyCmd, queue);
+	}
+
+	void VulkanDevice::createColorImage(vks::Texture& image)
+	{
+		VkImageCreateInfo imageCI = vks::initializers::imageCreateInfo();
+		imageCI.imageType = VK_IMAGE_TYPE_2D;
+		imageCI.format = image.format;
+		imageCI.extent.width = image.width;
+		imageCI.extent.height = image.height;
+		imageCI.extent.depth = 1;
+		imageCI.mipLevels = image.mipLevels;
+		imageCI.arrayLayers = image.layerCount;
+		imageCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
+		imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
+		imageCI.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;//指定图像可以作为传输操作的源
+		//imageCI.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;//指定图像可以作为传输操作的目标
+		//imageCI.usage |= VK_IMAGE_USAGE_STORAGE_BIT;//指定图像可以在计算着色器中读写
+		imageCI.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;//指定图像可以作为颜色附件使用，即作为存储渲染输出颜色值的图像
+		imageCI.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;//指定图像可被着色器采样
+		VK_CHECK_RESULT(vkCreateImage(logicalDevice, &imageCI, nullptr, &image.image));
+		VkMemoryAllocateInfo memAlloc = vks::initializers::memoryAllocateInfo();
+		VkMemoryRequirements memReqs;
+		vkGetImageMemoryRequirements(logicalDevice, image.image, &memReqs);
+		memAlloc.allocationSize = memReqs.size;
+		memAlloc.memoryTypeIndex = getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		VK_CHECK_RESULT(vkAllocateMemory(logicalDevice, &memAlloc, nullptr, &image.deviceMemory));
+		VK_CHECK_RESULT(vkBindImageMemory(logicalDevice, image.image, image.deviceMemory, 0));
+		// Image view
+		VkImageViewCreateInfo viewCI = vks::initializers::imageViewCreateInfo();
+		viewCI.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		viewCI.format = image.format;
+		viewCI.subresourceRange = {};
+		viewCI.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		viewCI.subresourceRange.levelCount = image.mipLevels;
+		viewCI.subresourceRange.layerCount = image.layerCount;
+		viewCI.image = image.image;
+		VK_CHECK_RESULT(vkCreateImageView(logicalDevice, &viewCI, nullptr, &image.view));
+		// Sampler
+		VkSamplerCreateInfo samplerCI = vks::initializers::samplerCreateInfo();
+		samplerCI.magFilter = VK_FILTER_LINEAR;
+		samplerCI.minFilter = VK_FILTER_LINEAR;
+		samplerCI.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerCI.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerCI.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerCI.minLod = 0.0f;
+		samplerCI.maxLod = static_cast<float>(image.mipLevels);;
+		samplerCI.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+		VK_CHECK_RESULT(vkCreateSampler(logicalDevice, &samplerCI, nullptr, &image.sampler));
+		image.updateDescriptor();
 	}
 
 	/** 

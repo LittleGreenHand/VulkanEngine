@@ -47,6 +47,7 @@ public:
 	//数学相关
 	static glm::quat eularToQuaternion(const glm::vec3& euler);
 	static glm::vec3 generateUpVector(const glm::vec3& forward);
+
 public:
 	//UI相关
 	static vkglTF::Node* selectedNode;
@@ -54,6 +55,12 @@ public:
 	static void DrawNodePropertiesPanel();
 
 public:
+	//场景相关
 	//计算并获取场景包围盒
 	static Dimensions GetSceneDimensions();
+
+public:
+	//纹理相关
+	//转换图像布局
+	static void transitionImageLayout(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT);
 };

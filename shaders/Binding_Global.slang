@@ -1,3 +1,4 @@
+import types;
 struct VSInput
 {
     float3 Pos;
@@ -16,10 +17,4 @@ struct GlobalParams {
     float exposure;
     float gamma;
 };
-[[vk::binding(0, 0)]] ConstantBuffer<GlobalParams> globalParams;
-
-//PBR IBL
-[[vk::binding(0, 1)]] SamplerCube samplerIrradiance;
-[[vk::binding(1, 1)]] SamplerCube prefilteredMapSampler;
-[[vk::binding(2, 1)]] Sampler2D samplerBRDFLUT;
-[[vk::binding(3, 1)]] SamplerCube samplerEnv;
+[[vk::binding(0, LBI_GLOBAL)]] ConstantBuffer<GlobalParams> globalParams;
