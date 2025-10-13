@@ -55,12 +55,6 @@ struct PipelineInfo {
 			vkDestroyPipelineLayout(device, layout, nullptr);
 	}
 };
-//Pipeline索引
-enum PipelinesIndex {
-	PL_Skybox = 0,
-	PL_PBR,
-	PL_Count
-};
 
 struct Dimensions {
 	glm::vec3 min = glm::vec3(FLT_MAX);

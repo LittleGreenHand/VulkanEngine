@@ -68,6 +68,58 @@ PipelineBuilder& PipelineBuilder::setVertexInputState(
     return *this;
 }
 
+void PipelineBuilder::enableBlendingAdditive()
+{
+    //加法混合公式：outColor = srcColor.rgb * srcColor.a + dstColor.rgb * 1.0
+
+    //开启混合功能
+    blendAttachmentState.blendEnable = VK_TRUE;
+
+    //源颜色混合因子：使用源颜色的Alpha值（常用于控制透明度）
+    blendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+
+    //目标颜色混合因子：使用常量值1（保持目标颜色完全强度）
+    blendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+
+    //颜色混合操作：将源和目标颜色相加
+    blendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
+
+    //源Alpha混合因子：使用常量值1（保持源Alpha完全强度）
+    blendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+
+    //目标Alpha混合因子：使用常量值0（忽略目标Alpha）
+    blendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+
+    //Alpha混合操作：直接使用源Alpha值（不进行混合）
+    blendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
+}
+
+void PipelineBuilder::enableBlendingAlphaBlend()
+{
+    //Alpha混合公式：outColor = srcColor.rgb * srcColor.a + dstColor.rgb * (1.0 - srcColor.a)
+
+    //开启混合功能
+    blendAttachmentState.blendEnable = VK_TRUE;
+
+    //源颜色混合因子：使用源颜色的Alpha值
+    blendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+
+    //目标颜色混合因子：使用 1 - 源Alpha值（实现标准透明度混合）
+    blendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+
+    //颜色混合操作：将源和目标颜色相加
+    blendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
+
+    //源Alpha混合因子：使用常量值1
+    blendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+
+    //目标Alpha混合因子：使用常量值0
+    blendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+
+    //Alpha混合操作：直接使用源Alpha值
+    blendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
+}
+
 PipelineBuilder& PipelineBuilder::addShaderStage(const VkPipelineShaderStageCreateInfo stage) {
     shaderStages.push_back(stage);
     return *this;

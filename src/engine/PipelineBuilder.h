@@ -26,7 +26,7 @@ public:
 
     // 设置颜色混合附件状态
     PipelineBuilder& setColorBlendAttachmentState(
-        uint32_t colorWriteMask = 0xf,
+		uint32_t colorWriteMask = 0xf,//启用RGBA通道的写入
         VkBool32 blendEnable = VK_FALSE);
 
     // 设置深度模板状态
@@ -59,6 +59,12 @@ public:
         vkglTF::VertexComponent::UV,
         vkglTF::VertexComponent::Color,
         vkglTF::VertexComponent::Tangent }));
+
+    //配置加法混合模式
+    void enableBlendingAdditive();
+
+    //配置标准透明混合模式
+    void enableBlendingAlphaBlend();
 
     // 添加着色器阶段
     PipelineBuilder& addShaderStage(const VkPipelineShaderStageCreateInfo stage);

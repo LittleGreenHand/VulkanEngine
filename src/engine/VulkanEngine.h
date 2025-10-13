@@ -18,6 +18,14 @@
 #include "VulkanglTFModel.h"
 #include "VulkanLights.h"
 
+//Pipeline索引
+enum PipelinesIndex {
+	PL_Skybox = 0,
+	PL_PBR_OPAQUE,//不透明物体
+	PL_PBR_MASK,//遮罩物体
+	PL_PBR_BLEND,//半透明物体
+	PL_Count
+};
 //前向声明
 class PostProcessManager;
 

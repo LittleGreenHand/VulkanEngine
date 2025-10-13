@@ -282,7 +282,6 @@ void VulkanEngine::preparePipelines()
 
 	// PBR pipeline
 	{
-		PipelineBuilder builder(device);
 		std::vector<VkDescriptorSetLayout> setLayoutsVector;
 		setLayoutsVector.resize(5);
 		setLayoutsVector[LBI_GLOBAL] = setLayouts[LBI_GLOBAL];
@@ -291,16 +290,36 @@ void VulkanEngine::preparePipelines()
 		setLayoutsVector[LBI_MATERIALS] = setLayouts[LBI_MATERIALS];
 		setLayoutsVector[LBI_MESH] = setLayouts[LBI_MESH];
 		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(setLayoutsVector);
-		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_PBR].layout));
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_PBR_OPAQUE].layout));
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_PBR_MASK].layout));
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_PBR_BLEND].layout));
 
-		builder.rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
+		PipelineBuilder builder(device);
 		//启用深度测试与写入
 		builder.depthStencilState.depthWriteEnable = VK_TRUE;
 		builder.depthStencilState.depthTestEnable = VK_TRUE;
 		builder.addShaderStage(loadShader(getShadersPath() + "PBR_Render.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
 		builder.addShaderStage(loadShader(getShadersPath() + "PBR_Render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
-		builder.buildPipeline(mainRenderPass.renderPass, pipelineCache, pipelines[PL_PBR].layout, pipelines[PL_PBR].pipeline);
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_PBR].pipeline, "PBRRender pipeline");
+
+		//通过特化常量设置不同的透明度模式
+		uint32_t ALPHAMODE;
+		VkSpecializationMapEntry specializationMapEntry = vks::initializers::specializationMapEntry(0, 0, sizeof(uint32_t));
+		VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(1, &specializationMapEntry, sizeof(uint32_t), &ALPHAMODE);
+		builder.shaderStages[1].pSpecializationInfo = &specializationInfo;
+
+		ALPHAMODE = 0;
+		builder.buildPipeline(mainRenderPass.renderPass, pipelineCache, pipelines[PL_PBR_OPAQUE].layout, pipelines[PL_PBR_OPAQUE].pipeline);
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_PBR_OPAQUE].pipeline, "PBR_OPAQUE pipeline");
+
+		ALPHAMODE = 1;
+		builder.buildPipeline(mainRenderPass.renderPass, pipelineCache, pipelines[PL_PBR_MASK].layout, pipelines[PL_PBR_MASK].pipeline);
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_PBR_MASK].pipeline, "PBR_MASK pipeline");
+
+		ALPHAMODE = 2;
+		builder.depthStencilState.depthWriteEnable = VK_FALSE;
+		builder.enableBlendingAlphaBlend();
+		builder.buildPipeline(mainRenderPass.renderPass, pipelineCache, pipelines[PL_PBR_BLEND].layout, pipelines[PL_PBR_BLEND].pipeline);
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_PBR_BLEND].pipeline, "PBR_BLEND pipeline");
 	}
 
 	auto tEnd = std::chrono::high_resolution_clock::now();
@@ -377,6 +396,7 @@ void VulkanEngine::buildCommandBuffer()
 	descriptorSetsArray[LBI_GLOBAL] = globalDescriptorSets[currentBuffer];
 	descriptorSetsArray[LBI_IBL] = IBLDescriptorSet;
 	descriptorSetsArray[LBI_LIGHTS] = vkLight::descriptorSet;
+
 	// Skybox
 	if (displaySkybox)
 	{
@@ -389,15 +409,36 @@ void VulkanEngine::buildCommandBuffer()
 
 	//PBR
 	{
-		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline PBR", { 1.0f, 1.0f, 1.0f });
-		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR].pipeline);
-		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
-
+		//不透明物体
+		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline PBR_OPAQUE", { 1.0f, 1.0f, 1.0f });
+		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_OPAQUE].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
+		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_OPAQUE].pipeline);
 		for (auto& [key, model] : models)
 		{
-			model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial, pipelines[PL_PBR].layout);
+			model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial | vkglTF::RenderFlags::RenderOpaqueNodes, pipelines[PL_PBR_OPAQUE].layout);
 		}
 		vkUtils::cmdEndLabel(cmdBuffer);
+
+		//遮罩物体
+		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline PBR_MASK", { 1.0f, 1.0f, 1.0f });
+		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_MASK].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
+		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_MASK].pipeline);
+		for (auto& [key, model] : models)
+		{
+			model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial | vkglTF::RenderFlags::RenderAlphaMaskedNodes, pipelines[PL_PBR_MASK].layout);
+		}
+		vkUtils::cmdEndLabel(cmdBuffer);
+
+		//透明物体
+		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline PBR_BLEND", { 1.0f, 1.0f, 1.0f });
+		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_BLEND].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
+		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_BLEND].pipeline);
+		for (auto& [key, model] : models)
+		{
+			model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial | vkglTF::RenderFlags::RenderAlphaBlendedNodes, pipelines[PL_PBR_BLEND].layout);
+		}
+		vkUtils::cmdEndLabel(cmdBuffer);
+
 	}
 
 	vkCmdEndRenderPass(cmdBuffer);

@@ -15,6 +15,8 @@ struct VSOutput
     float3 Color;
 };
 
+//0：不透明  1：遮罩  2：半透明
+[SpecializationConstant] const int ALPHAMODE = 0; 
 #define PI 3.1415926535897932384626433832795
 
 // 法线分布函数(D)：GGX模型
@@ -259,6 +261,14 @@ float4 fragmentMain(VSOutput input)
     else {
         albedoColor = baseColorTexture.Sample(input.UV);
         albedoColor.rgb = pow(albedoColor.rgb, float3(2.2, 2.2, 2.2));
+    }
+    if(ALPHAMODE == 1)
+    {
+        if (albedoColor.a < 0.01f)
+        {
+            //遮罩模式，alpha值为0，丢弃当前片段
+            discard;
+        }
     }
     float3 emission = emissiveTexture.Sample(input.UV).rgb;
 
