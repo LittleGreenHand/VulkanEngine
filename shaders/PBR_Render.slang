@@ -262,9 +262,10 @@ float4 fragmentMain(VSOutput input)
         albedoColor = baseColorTexture.Sample(input.UV);
         albedoColor.rgb = pow(albedoColor.rgb, float3(2.2, 2.2, 2.2));
     }
+    albedoColor.rgb *= materialParameters.baseColorFactor.rgb;
     if(ALPHAMODE == 1)
     {
-        if (albedoColor.a < 0.01f)
+        if (albedoColor.a < materialParameters.alphaCutoff)
         {
             //遮罩模式，alpha值为0，丢弃当前片段
             discard;

@@ -1409,6 +1409,7 @@ void vkglTF::Model::loadFromFile(std::string filename, vks::VulkanDevice *device
 						// Pre-Multiply vertex colors with material base color
 						if (preMultiplyColor) {
 							vertex.color = primitive->material.materialParameters.baseColorFactor * vertex.color;
+							primitive->material.materialParameters.baseColorFactor = glm::vec4(1.0f);
 						}
 						if(preTransform || flipY)
 						{
