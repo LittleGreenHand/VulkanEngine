@@ -909,9 +909,8 @@ VulkanEngineBase::~VulkanEngineBase()
 	{
 		vkDestroyShaderModule(device, shaderModule, nullptr);
 	}
-	vkDestroyImageView(device, depthStencil.view, nullptr);
-	vkDestroyImage(device, depthStencil.image, nullptr);
-	vkFreeMemory(device, depthStencil.memory, nullptr);
+
+	depthStencil.destroy();
 
 	vkDestroyPipelineCache(device, pipelineCache, nullptr);
 
@@ -2959,7 +2958,7 @@ void VulkanEngineBase::createSynchronizationPrimitives()
 		VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCI, nullptr, &semaphore));
 	}
 	// Semaphore used to ensure that all commands submitted have been finished before submitting the image to the queue
-	renderCompleteSemaphores.resize(swapChain.images.size());
+	renderCompleteSemaphores.resize(swapChain.swapChainImages.size());
 	for (auto& semaphore : renderCompleteSemaphores) {
 		VkSemaphoreCreateInfo semaphoreCI{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 		VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCI, nullptr, &semaphore));
@@ -2999,7 +2998,7 @@ void VulkanEngineBase::setupDepthStencil()
 	imageCI.arrayLayers = 1;
 	imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
 	imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
-	imageCI.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	imageCI.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
 	VK_CHECK_RESULT(vkCreateImage(device, &imageCI, nullptr, &depthStencil.image));
 	VkMemoryRequirements memReqs{};
@@ -3009,8 +3008,8 @@ void VulkanEngineBase::setupDepthStencil()
 	memAllloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	memAllloc.allocationSize = memReqs.size;
 	memAllloc.memoryTypeIndex = vulkanDevice->getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	VK_CHECK_RESULT(vkAllocateMemory(device, &memAllloc, nullptr, &depthStencil.memory));
-	VK_CHECK_RESULT(vkBindImageMemory(device, depthStencil.image, depthStencil.memory, 0));
+	VK_CHECK_RESULT(vkAllocateMemory(device, &memAllloc, nullptr, &depthStencil.deviceMemory));
+	VK_CHECK_RESULT(vkBindImageMemory(device, depthStencil.image, depthStencil.deviceMemory, 0));
 
 	VkImageViewCreateInfo imageViewCI{};
 	imageViewCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -3023,10 +3022,52 @@ void VulkanEngineBase::setupDepthStencil()
 	imageViewCI.subresourceRange.layerCount = 1;
 	imageViewCI.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 	// Stencil aspect should only be set on depth + stencil formats (VK_FORMAT_D16_UNORM_S8_UINT..VK_FORMAT_D32_SFLOAT_S8_UINT
-	if (depthFormat >= VK_FORMAT_D16_UNORM_S8_UINT) {
-		imageViewCI.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-	}
+	// 对于图像视图，不能同时设置VK_IMAGE_ASPECT_DEPTH_BIT和VK_IMAGE_ASPECT_STENCIL_BIT，必须根据格式选择其一
+	//if (depthFormat >= VK_FORMAT_D16_UNORM_S8_UINT) {
+	//	imageViewCI.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+	//}
 	VK_CHECK_RESULT(vkCreateImageView(device, &imageViewCI, nullptr, &depthStencil.view));
+
+	//创建采样器
+	VkSamplerCreateInfo samplerInfo{};
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+
+	// 深度图通常使用 nearest 过滤以保持精确的深度值
+	samplerInfo.magFilter = VK_FILTER_NEAREST;
+	samplerInfo.minFilter = VK_FILTER_NEAREST;
+
+	//使用 clamp 寻址模式，避免边缘像素错误
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+	// 边框颜色对深度图影响不大，可设为透明黑色
+	samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+	samplerInfo.unnormalizedCoordinates = VK_FALSE;
+
+	// 禁用 mipmap
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	samplerInfo.mipLodBias = 0.0f;
+	samplerInfo.minLod = 0.0f;
+	samplerInfo.maxLod = 0.0f; 
+
+	// 启用深度比较功能
+	samplerInfo.compareEnable = VK_TRUE;
+	samplerInfo.compareOp = VK_COMPARE_OP_LESS;  // 常用的深度比较操作
+
+	// 深度图通常不需要各向异性过滤
+	samplerInfo.anisotropyEnable = VK_FALSE;
+	samplerInfo.maxAnisotropy = 1.0f;
+
+	VK_CHECK_RESULT(vkCreateSampler(device, &samplerInfo, nullptr, &depthStencil.sampler));
+
+	depthStencil.device = vulkanDevice;
+	depthStencil.width = width;
+	depthStencil.height = height;
+	depthStencil.mipLevels = 1;
+	depthStencil.layerCount = 1;
+	depthStencil.format = depthFormat;
+	depthStencil.updateDescriptor();
 }
 
 void VulkanEngineBase::setupFrameBuffer()
@@ -3060,7 +3101,7 @@ void VulkanEngineBase::setupRenderPass()
 	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	// Depth attachment
 	attachments[1].format = depthFormat;
 	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -3069,7 +3110,7 @@ void VulkanEngineBase::setupRenderPass()
 	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 
 	VkAttachmentReference colorReference = {};
 	colorReference.attachment = 0;
@@ -3143,9 +3184,7 @@ void VulkanEngineBase::windowResize()
 	createSwapChain();
 
 	// Recreate the frame buffers
-	vkDestroyImageView(device, depthStencil.view, nullptr);
-	vkDestroyImage(device, depthStencil.image, nullptr);
-	vkFreeMemory(device, depthStencil.memory, nullptr);
+	depthStencil.destroy();
 	for (auto& offscreenTex : offscreenTexture) {
 		offscreenTex.destroy();
 	}

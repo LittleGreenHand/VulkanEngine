@@ -4,6 +4,25 @@
 #include "PostProcessBase.h"
 #include "PipelineBuilder.h"
 #include "PostProcess_ToneMapping.h"
+#include "PostProcess_DOF.h"
+
+VulkanEngine::VulkanEngine() : VulkanEngineBase()
+{
+	title = "VulkanEngine";
+	camera.type = Camera::CameraType::firstperson;
+	camera.movementSpeed = 8.0f;
+	camera.setPerspective(60.0f, (float)width / (float)height, 0.01f, 256.0f);
+
+	camera.rotationSpeed = 0.25f;
+	camera.setRotation({ 0.0f, 0.0f, 0.0f });
+	camera.setPosition({ 0.f, 0.f, 0.f });
+
+	camera.focusDistance = 1.0f;
+	camera.focusRange = 1.0f;
+	camera.maxBlurRadius = 4.5f;
+	camera.aperture = 0.56f;
+}
+
 VulkanEngine::~VulkanEngine()
 {
 	vkLight::destroyLightBuffer();
@@ -172,8 +191,8 @@ void VulkanEngine::loadAssets()
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.aoMap.image, "aoMap");
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.metallicMap.image, "metallicMap");
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.roughnessMap.image, "roughnessMap");
-		for (int i = 0; i < swapChain.images.size(); i++)
-			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)swapChain.images[i], ("swapchainImage" + std::to_string(i)));
+		for (int i = 0; i < swapChain.swapChainImages.size(); i++)
+			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)swapChain.swapChainImages[i].image, ("swapchainImage" + std::to_string(i)));
 	}
 
 	auto tEnd = std::chrono::high_resolution_clock::now(); 
@@ -343,8 +362,12 @@ void VulkanEngine::updateUniformBuffers()
 	globalParam.inverseView = glm::inverse(camera.matrices.view);
 	globalParam.projection = camera.matrices.perspective;
 	globalParam.camPos = camera.position;
-	
+	globalParam.nearPlane = camera.znear;
+	globalParam.farPlane = camera.zfar;	
 	memcpy(globalParamBuffers[currentBuffer].globalParamBuffer.mapped, &globalParam, sizeof(GlobalParams));
+
+	PostProcessBase::update(width, height);
+	postProcessManager->dofProcess->setDOFParams(camera.znear, camera.zfar, camera.focusDistance, camera.focusRange, camera.maxBlurRadius, camera.aperture);
 }
 
 void VulkanEngine::preparePostProcess() 
@@ -442,23 +465,34 @@ void VulkanEngine::buildCommandBuffer()
 	}
 
 	vkCmdEndRenderPass(cmdBuffer);
+	//更新布局
+	offscreenTexture[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	depthStencil.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+	offscreenTexture[0].updateDescriptor();
+	depthStencil.updateDescriptor();
 
 	//后处理
 	{
-		PostProcessBase::update(width, height);
-		vkUtils::transitionImageLayout(cmdBuffer, offscreenTexture[0].image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-		offscreenTexture[0].descriptor.imageLayout = offscreenTexture[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		vkUtils::transitionImageLayout(cmdBuffer, swapChain.images[currentImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-		postProcessManager->toneMappingProcess->excute(cmdBuffer, offscreenTexture[0].descriptor, swapChain.imageViews[currentImageIndex]);
-
-		vkUtils::transitionImageLayout(cmdBuffer, swapChain.images[currentImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+		//景深
+		if(camera.enableDOF)
+		{
+			vkUtils::transitionImageLayout(cmdBuffer, offscreenTexture[1], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+			postProcessManager->dofProcess->excute(cmdBuffer, offscreenTexture[0].descriptor, depthStencil.descriptor, offscreenTexture[1].view);
+			vkUtils::copyImageToImage(cmdBuffer, offscreenTexture[1], offscreenTexture[0]);
+		}
+		//色调映射
+		{
+			vkUtils::transitionImageLayout(cmdBuffer, offscreenTexture[0], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			vkUtils::transitionImageLayout(cmdBuffer, swapChain.swapChainImages[currentImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+			postProcessManager->toneMappingProcess->excute(cmdBuffer, offscreenTexture[0].descriptor, swapChain.swapChainImages[currentImageIndex].view);
+		}
 	}
 
 	// UI
 	{
 		vkUtils::cmdBeginLabel(cmdBuffer, "ImGUI", { 1.0f, 1.0f, 1.0f });
-		VkRenderingAttachmentInfo colorAttachment = vks::initializers::RenderingAttachmentInfo_Color(swapChain.imageViews[currentImageIndex], nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		vkUtils::transitionImageLayout(cmdBuffer, swapChain.swapChainImages[currentImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		VkRenderingAttachmentInfo colorAttachment = vks::initializers::RenderingAttachmentInfo_Color(swapChain.swapChainImages[currentImageIndex].view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 		VkRenderingInfo renderInfo = vks::initializers::RenderingInfo({ width, height }, &colorAttachment, nullptr);
 		vkCmdBeginRendering(cmdBuffer, &renderInfo);
 		vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
@@ -467,6 +501,7 @@ void VulkanEngine::buildCommandBuffer()
 		vkCmdEndRendering(cmdBuffer);
 		vkUtils::cmdEndLabel(cmdBuffer);
 	}
+	vkUtils::transitionImageLayout(cmdBuffer, swapChain.swapChainImages[currentImageIndex], VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuffer));
 }
 
@@ -489,6 +524,14 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 			ImGui::SliderFloat("旋转速度", &camera.rotationSpeed, 0.1f, 10);
 			ImGui::InputFloat3("位置", (float*)&camera.position);
 			ImGui::InputFloat3("旋转", (float*)&camera.rotation);
+			ImGui::Checkbox("景深", &camera.enableDOF);
+			if (camera.enableDOF)
+			{
+				ImGui::InputFloat("焦距", &camera.focusDistance, 0.1f, 1, "%.1f");
+				ImGui::InputFloat("焦平面范围", &camera.focusRange, 0.1f, 1, "%.1f");
+				ImGui::InputFloat("光圈", &camera.aperture, 0.1f, 1, "%.1f");
+				ImGui::InputFloat("最大模糊半径", &camera.maxBlurRadius, 0.1f, 1, "%.1f");
+			}
 			if(ImGui::Checkbox("正交视图", &camera.useOrthographic))
 				camera.switchProjectionType();
 			if (camera.useOrthographic)

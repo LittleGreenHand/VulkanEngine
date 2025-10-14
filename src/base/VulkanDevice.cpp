@@ -466,8 +466,8 @@ namespace vks
 		imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
 		imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
 		imageCI.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;//指定图像可以作为传输操作的源
-		//imageCI.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;//指定图像可以作为传输操作的目标
-		//imageCI.usage |= VK_IMAGE_USAGE_STORAGE_BIT;//指定图像可以在计算着色器中读写
+		imageCI.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;//指定图像可以作为传输操作的目标
+		imageCI.usage |= VK_IMAGE_USAGE_STORAGE_BIT;//指定图像可以在计算着色器中读写
 		imageCI.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;//指定图像可以作为颜色附件使用，即作为存储渲染输出颜色值的图像
 		imageCI.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;//指定图像可被着色器采样
 		VK_CHECK_RESULT(vkCreateImage(logicalDevice, &imageCI, nullptr, &image.image));

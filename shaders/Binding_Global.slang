@@ -12,8 +12,10 @@ struct VSInput
 struct GlobalParams {
 	float4x4 view;
 	float4x4 inverseView;
-	float4x4 projection;
+    float4x4 projection;
     float3 camPos;
+    float nearPlane;
+    float farPlane;
     float exposure;
     float gamma;
 };

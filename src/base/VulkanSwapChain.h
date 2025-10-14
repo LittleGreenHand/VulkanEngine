@@ -18,7 +18,7 @@
 
 #include <vulkan/vulkan.h>
 #include "VulkanTools.h"
-
+#include "VulkanTexture.h"
 #ifdef __ANDROID__
 #include "VulkanAndroid.h"
 #endif
@@ -38,8 +38,9 @@ public:
 	VkFormat colorFormat{};
 	VkColorSpaceKHR colorSpace{};
 	VkSwapchainKHR swapChain{ VK_NULL_HANDLE };
-	std::vector<VkImage> images{};
-	std::vector<VkImageView> imageViews{};
+	std::vector<vks::Texture> swapChainImages{};
+	//std::vector<VkImage> images{};
+	//std::vector<VkImageView> imageViews{};
 	uint32_t queueNodeIndex{ UINT32_MAX };
 	uint32_t imageCount{ 0 };
 

@@ -56,6 +56,12 @@ public:
     float znear, zfar;
     float aspect = 1;
 
+	bool enableDOF = false; // 是否启用景深效果
+    float focusDistance;    // 焦点距离
+    float focusRange;       // 焦点范围（清晰区域）
+	float maxBlurRadius;    // 最大模糊半径，配合光圈大小，值越大，模糊效果越明显，但性能开销也越大
+    float aperture;         // 光圈大小（影响模糊强度）
+
     float rotationSpeed = 1.0f;
     float movementSpeed = 1.0f;
 

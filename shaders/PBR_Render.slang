@@ -15,8 +15,8 @@ struct VSOutput
     float3 Color;
 };
 
-//0：不透明  1：遮罩  2：半透明
-[SpecializationConstant] const int ALPHAMODE = 0; 
+// 0：不透明  1：遮罩  2：半透明
+[SpecializationConstant] const int ALPHAMODE = 0;
 #define PI 3.1415926535897932384626433832795
 
 // 法线分布函数(D)：GGX模型

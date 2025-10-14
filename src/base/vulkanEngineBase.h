@@ -217,11 +217,7 @@ public:
 	std::array<vks::Texture, 2> offscreenTexture;
 	VkFormat offscreenFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 	/** @brief Default depth stencil attachment used by the default render pass */
-	struct {
-		VkImage image;
-		VkDeviceMemory memory;
-		VkImageView view;
-	} depthStencil{};
+	vks::Texture depthStencil{};
 
 	// OS specific
 #if defined(_WIN32)

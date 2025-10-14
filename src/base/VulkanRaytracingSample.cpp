@@ -112,9 +112,9 @@ void VulkanRaytracingSample::setupFrameBuffer()
 	mainRenderPass.width = width;
 	mainRenderPass.height = height;
 	// Create frame buffers for every swap chain image
-	mainRenderPass.frameBuffers.resize(swapChain.images.size());
+	mainRenderPass.frameBuffers.resize(swapChain.swapChainImages.size());
 	for (uint32_t i = 0; i < mainRenderPass.frameBuffers.size(); i++) {
-		attachments[0] = swapChain.imageViews[i];
+		attachments[0] = swapChain.swapChainImages[i].view;
 		VK_CHECK_RESULT(vkCreateFramebuffer(device, &frameBufferCreateInfo, nullptr, &mainRenderPass.frameBuffers[i]));
 	}
 }

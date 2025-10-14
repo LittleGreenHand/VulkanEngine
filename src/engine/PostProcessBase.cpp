@@ -1,5 +1,6 @@
 #include "PostProcessBase.h"
 #include "PostProcess_ToneMapping.h"
+#include "PostProcess_DOF.h"
 
 vks::VulkanDevice* PostProcessBase::vulkanDevice = nullptr;
 VkDevice PostProcessBase::device = VK_NULL_HANDLE;
@@ -46,6 +47,10 @@ void PostProcessManager::prepare()
 	if (!toneMappingProcess)
 		toneMappingProcess = new PostProcessToneMapping();
 	toneMappingProcess->prepare();
+
+	if (!dofProcess)
+		dofProcess = new PostProcessDOF();
+	dofProcess->prepare();
 }
 
 void PostProcessManager::destroyALL()
@@ -55,5 +60,12 @@ void PostProcessManager::destroyALL()
 		toneMappingProcess->destroy();
 		delete toneMappingProcess;
 		toneMappingProcess = nullptr;
+	}
+
+	if(dofProcess)
+	{
+		dofProcess->destroy();
+		delete dofProcess;
+		dofProcess = nullptr;
 	}
 }

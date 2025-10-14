@@ -333,22 +333,23 @@ void VulkanSwapChain::create(uint32_t& width, uint32_t& height, bool vsync, bool
 	}
 
 	VK_CHECK_RESULT(vkCreateSwapchainKHR(device, &swapchainCI, nullptr, &swapChain));
-
 	// If an existing swap chain is re-created, destroy the old swap chain and the ressources owned by the application (image views, images are owned by the swap chain)
 	if (oldSwapchain != VK_NULL_HANDLE) { 
-		for (auto i = 0; i < images.size(); i++) {
-			vkDestroyImageView(device, imageViews[i], nullptr);
+		for (auto i = 0; i < swapChainImages.size(); i++) {
+			vkDestroyImageView(device, swapChainImages[i].view, nullptr);
 		}
 		vkDestroySwapchainKHR(device, oldSwapchain, nullptr);
 	}
 	VK_CHECK_RESULT(vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr));
 
 	// Get the swap chain images
+	std::vector<VkImage> images{};
 	images.resize(imageCount);
+	swapChainImages.resize(imageCount);
 	VK_CHECK_RESULT(vkGetSwapchainImagesKHR(device, swapChain, &imageCount, images.data()));
 
 	// Get the swap chain buffers containing the image and imageview
-	imageViews.resize(imageCount);
+	//imageViews.resize(imageCount);
 	for (auto i = 0; i < images.size(); i++)
 	{
 		VkImageViewCreateInfo colorAttachmentView = {};
@@ -368,8 +369,8 @@ void VulkanSwapChain::create(uint32_t& width, uint32_t& height, bool vsync, bool
 		colorAttachmentView.subresourceRange.layerCount = 1;
 		colorAttachmentView.viewType = VK_IMAGE_VIEW_TYPE_2D;
 		colorAttachmentView.flags = 0;
-		colorAttachmentView.image = images[i];
-		VK_CHECK_RESULT(vkCreateImageView(device, &colorAttachmentView, nullptr, &imageViews[i]));
+		colorAttachmentView.image = swapChainImages[i].image = images[i];
+		VK_CHECK_RESULT(vkCreateImageView(device, &colorAttachmentView, nullptr, &swapChainImages[i].view));
 	}
 }
 
@@ -401,8 +402,8 @@ VkResult VulkanSwapChain::queuePresent(VkQueue queue, uint32_t imageIndex, VkSem
 void VulkanSwapChain::cleanup()
 {
 	if (swapChain != VK_NULL_HANDLE) {
-		for (auto i = 0; i < images.size(); i++) {
-			vkDestroyImageView(device, imageViews[i], nullptr);
+		for (auto i = 0; i < swapChainImages.size(); i++) {
+			vkDestroyImageView(device, swapChainImages[i].view, nullptr);
 		}
 		vkDestroySwapchainKHR(device, swapChain, nullptr);
 	}

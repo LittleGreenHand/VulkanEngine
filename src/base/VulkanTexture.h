@@ -33,7 +33,7 @@ class Texture
   public:
 	vks::VulkanDevice *		device;
 	VkImage					image{ VK_NULL_HANDLE };
-	VkImageLayout			imageLayout;
+	VkImageLayout			imageLayout{ VK_IMAGE_LAYOUT_UNDEFINED };
 	VkDeviceMemory			deviceMemory{ VK_NULL_HANDLE };
 	VkImageView				view{ VK_NULL_HANDLE };
 	uint32_t				width, height;
