@@ -220,6 +220,7 @@ void VulkanEngineBase::prepare()
 	createCommandBuffers();
 	createSynchronizationPrimitives();
 	setupOffscreenAttachment();
+	setupMotionVector();
 	setupDepthStencil();
 	setupRenderPass();
 	createPipelineCache();
@@ -910,6 +911,7 @@ VulkanEngineBase::~VulkanEngineBase()
 		vkDestroyShaderModule(device, shaderModule, nullptr);
 	}
 
+	motionVector.destroy();
 	depthStencil.destroy();
 
 	vkDestroyPipelineCache(device, pipelineCache, nullptr);
@@ -2987,6 +2989,17 @@ void VulkanEngineBase::setupOffscreenAttachment()
 	}
 }
 
+void VulkanEngineBase::setupMotionVector()
+{
+	motionVector.device = vulkanDevice;
+	motionVector.format = motionVectorFormat;
+	motionVector.width = width;
+	motionVector.height = height;
+	motionVector.mipLevels = 1;
+	motionVector.layerCount = 1;
+	vulkanDevice->createColorImage(motionVector);
+}
+
 void VulkanEngineBase::setupDepthStencil()
 {
 	VkImageCreateInfo imageCI{};
@@ -3077,11 +3090,11 @@ void VulkanEngineBase::setupFrameBuffer()
 		mainRenderPass.frameBuffers.resize(1);
 		mainRenderPass.width = width;
 		mainRenderPass.height = height;
-		const VkImageView attachments[2] = { offscreenTexture[0].view,	depthStencil.view };
+		const VkImageView attachments[3] = { offscreenTexture[0].view,	depthStencil.view , motionVector.view};
 		VkFramebufferCreateInfo frameBufferCreateInfo{};
 		frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		frameBufferCreateInfo.renderPass = mainRenderPass.renderPass;
-		frameBufferCreateInfo.attachmentCount = 2;
+		frameBufferCreateInfo.attachmentCount = 3;
 		frameBufferCreateInfo.pAttachments = attachments;
 		frameBufferCreateInfo.width = width;
 		frameBufferCreateInfo.height = height;
@@ -3092,7 +3105,7 @@ void VulkanEngineBase::setupFrameBuffer()
 
 void VulkanEngineBase::setupRenderPass()
 {
-	std::array<VkAttachmentDescription, 2> attachments = {};
+	std::array<VkAttachmentDescription, 3> attachments = {};
 	// Color attachment
 	attachments[0].format = offscreenFormat;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -3111,10 +3124,23 @@ void VulkanEngineBase::setupRenderPass()
 	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+	// Motion vector attachment
+	attachments[2].format = motionVectorFormat;
+	attachments[2].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // 初始清除为(0,0,0)
+	attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE; // 保存结果供后续使用
+	attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[2].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[2].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // 后处理阶段可读
 
-	VkAttachmentReference colorReference = {};
-	colorReference.attachment = 0;
-	colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	std::array<VkAttachmentReference, 2> colorReferences = {};
+	colorReferences[0].attachment = 0; // 颜色附件（索引0）
+	colorReferences[0].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	colorReferences[1].attachment = 2; // 运动向量附件（索引2）
+	colorReferences[1].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
 
 	VkAttachmentReference depthReference = {};
 	depthReference.attachment = 1;
@@ -3122,8 +3148,8 @@ void VulkanEngineBase::setupRenderPass()
 
 	VkSubpassDescription subpassDescription = {};
 	subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpassDescription.colorAttachmentCount = 1;
-	subpassDescription.pColorAttachments = &colorReference;
+	subpassDescription.colorAttachmentCount = static_cast<uint32_t>(colorReferences.size());
+	subpassDescription.pColorAttachments = colorReferences.data();
 	subpassDescription.pDepthStencilAttachment = &depthReference;
 	subpassDescription.inputAttachmentCount = 0;
 	subpassDescription.pInputAttachments = nullptr;
@@ -3133,7 +3159,7 @@ void VulkanEngineBase::setupRenderPass()
 
 	// Subpass dependencies for layout transitions
 	std::array<VkSubpassDependency, 2> dependencies{};
-
+	// 深度附件依赖
 	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
 	dependencies[0].dstSubpass = 0;
 	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
@@ -3141,7 +3167,7 @@ void VulkanEngineBase::setupRenderPass()
 	dependencies[0].srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 	dependencies[0].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 	dependencies[0].dependencyFlags = 0;
-
+	// 颜色附件依赖
 	dependencies[1].srcSubpass = VK_SUBPASS_EXTERNAL;
 	dependencies[1].dstSubpass = 0;
 	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -3184,11 +3210,13 @@ void VulkanEngineBase::windowResize()
 	createSwapChain();
 
 	// Recreate the frame buffers
+	motionVector.destroy();
 	depthStencil.destroy();
 	for (auto& offscreenTex : offscreenTexture) {
 		offscreenTex.destroy();
 	}
 	setupOffscreenAttachment();
+	setupMotionVector();
 	setupDepthStencil();
 	for (auto& frameBuffer : mainRenderPass.frameBuffers) {
 		vkDestroyFramebuffer(device, frameBuffer, nullptr);

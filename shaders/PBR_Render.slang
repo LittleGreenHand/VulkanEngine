@@ -3,6 +3,7 @@ import "Binding_IBL.slang";
 import "Binding_Light.slang";
 import "Binding_Material.slang";
 import "Binding_Mesh.slang";
+import "MotionVector.slang";
 
 struct VSOutput
 {
@@ -13,8 +14,14 @@ struct VSOutput
     float2 UV;
     float3 Tangent;
     float3 Color;
+    float4 currentClipPos;
+    float4 prevClipPos;
 };
-
+struct FSOutput
+{
+    float4 color : SV_TARGET0;
+    float4 motionVector : SV_TARGET1;
+};
 // 0：不透明  1：遮罩  2：半透明
 [SpecializationConstant] const int ALPHAMODE = 0;
 #define PI 3.1415926535897932384626433832795
@@ -202,14 +209,16 @@ VSOutput vertexMain(VSInput input)
     output.ViewPos = mul(globalParams.view, float4(output.WorldPos.xyz, 1.0)).xyz;
     output.Normal = mul((float3x3)meshInfo.model, input.Normal);
     output.Tangent = mul((float3x3)meshInfo.model, input.Tangent.xyz);
-	output.UV = input.UV;
-    output.Pos = mul(globalParams.projection, mul(globalParams.view, float4(output.WorldPos, 1.0)));
+    output.UV = input.UV;
+    output.Pos = mul(globalParams.viewProj, float4(output.WorldPos, 1.0));
+    output.currentClipPos = output.Pos;
+    output.prevClipPos = mul(globalParams.prevViewProj, mul(meshInfo.prevModel, float4(input.Pos.xyz, 1.0)));
     output.Color = input.Color;
     return output;
 }
 
 [shader("fragment")]
-float4 fragmentMain(VSOutput input)
+FSOutput fragmentMain(VSOutput input)
 {
 	float3 N = calculateNormal(input);
 	float3 V = normalize(globalParams.camPos - input.WorldPos);
@@ -360,5 +369,10 @@ float4 fragmentMain(VSOutput input)
         color *= getCascadeColor(cascadeIndex);
     }
     
-    return float4(color, albedoColor.a);
+    FSOutput output;
+    output.color = float4(color, albedoColor.a);
+    output.motionVector = Calculate3DVelocity(input.currentClipPos, input.prevClipPos, globalParams.jitter);
+    //bool tmp;
+    //output.color.rgb = DecodeVelocity(output.motionVector,tmp) * 10;
+    return output;
 }

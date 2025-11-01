@@ -252,8 +252,9 @@ namespace vkglTF
 			void* mapped;
 		} uniformBuffer;
 
-		struct alignas(16) UniformBlock {
+		struct alignas(16) MeshInfo {
 			glm::mat4 modelMatrix;
+			glm::mat4 prevModelMatrix;//上一帧的模型矩阵
 			glm::mat4 jointMatrix[64]{};
 			float jointcount{ 0 };
 		} uniformBlock;
@@ -262,6 +263,11 @@ namespace vkglTF
 		~Mesh();
 		void updateUniformBuffer()
 		{
+			memcpy(uniformBuffer.mapped, &uniformBlock, sizeof(uniformBlock));
+		}
+		void updatePrevMatrix()
+		{
+			uniformBlock.prevModelMatrix = uniformBlock.modelMatrix;
 			memcpy(uniformBuffer.mapped, &uniformBlock, sizeof(uniformBlock));
 		}
 	};
@@ -427,5 +433,6 @@ namespace vkglTF
 		Node* findNode(Node* parent, uint32_t index);
 		Node* nodeFromIndex(uint32_t index);
 		void prepareNodeDescriptor(vkglTF::Node* node, VkDescriptorSetLayout descriptorSetLayout);
+		void updatePrevMatrix();
 	};
 }

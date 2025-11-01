@@ -62,6 +62,9 @@ public:
 		glm::mat4 view;
 		glm::mat4 inverseView;
 		glm::mat4 projection;
+		glm::mat4 viewProj = glm::mat4{1.0f};
+		glm::mat4 prevViewProj;
+		glm::vec4 jitter;//xy为当前帧的抖动值，zw为上一帧的抖动值
 		glm::vec3 camPos;
 		float nearPlane;
 		float farPlane;

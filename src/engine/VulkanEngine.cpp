@@ -185,6 +185,7 @@ void VulkanEngine::loadAssets()
 	{
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)offscreenTexture[0].image, "offscreenTexture0");
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)offscreenTexture[1].image, "offscreenTexture1");
+		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)motionVector.image, "motionVector");
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.environmentCube.image, "environmentCube");
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.albedoMap.image, "albedoMap");
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.normalMap.image, "normalMap");
@@ -283,6 +284,8 @@ void VulkanEngine::preparePipelines()
 	//skybox pipeline
 	{
 		PipelineBuilder builder(device);
+		VkPipelineColorBlendAttachmentState colorBlendAttachments[2] = { vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE), vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE) };
+		builder.colorBlendState = vks::initializers::pipelineColorBlendStateCreateInfo(2, colorBlendAttachments);
 
 		std::vector<VkDescriptorSetLayout> setLayoutsVector;
 		setLayoutsVector.resize(2);
@@ -319,6 +322,8 @@ void VulkanEngine::preparePipelines()
 		builder.depthStencilState.depthTestEnable = VK_TRUE;
 		builder.addShaderStage(loadShader(getShadersPath() + "PBR_Render.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
 		builder.addShaderStage(loadShader(getShadersPath() + "PBR_Render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
+		VkPipelineColorBlendAttachmentState colorBlendAttachments[2] = { vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE), vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE) };
+		builder.colorBlendState = vks::initializers::pipelineColorBlendStateCreateInfo(2, colorBlendAttachments);
 
 		//通过特化常量设置不同的透明度模式
 		uint32_t ALPHAMODE;
@@ -357,10 +362,17 @@ void VulkanEngine::prepareUniformBuffers()
 
 void VulkanEngine::updateUniformBuffers()
 {
+	for (auto& model : models)
+	{
+		model.second.updatePrevMatrix();
+	}
 	// 3D object
 	globalParam.view = camera.matrices.view;
 	globalParam.inverseView = glm::inverse(camera.matrices.view);
 	globalParam.projection = camera.matrices.perspective;
+	globalParam.prevViewProj = globalParam.viewProj;
+	globalParam.viewProj = globalParam.projection * globalParam.view;
+	globalParam.jitter = glm::vec4(0.f, 0.f, 0.f, 0.f);
 	globalParam.camPos = camera.position;
 	globalParam.nearPlane = camera.znear;
 	globalParam.farPlane = camera.zfar;	
@@ -368,6 +380,10 @@ void VulkanEngine::updateUniformBuffers()
 
 	PostProcessBase::update(width, height);
 	postProcessManager->dofProcess->setDOFParams(camera.znear, camera.zfar, camera.focusDistance, camera.focusRange, camera.maxBlurRadius, camera.aperture);
+	//models[M_Cerberus].nodes[0]->scale = (glm::vec3(0.2f * (timer + 1)));
+	models[M_Cerberus].nodes[0]->rotation = vkUtils::eularToQuaternion(glm::vec3(-90, 90, (timer + 1) * 360.0));
+	models[M_Cerberus].nodes[0]->update();
+	
 }
 
 void VulkanEngine::preparePostProcess() 

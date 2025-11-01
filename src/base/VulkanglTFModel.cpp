@@ -1791,3 +1791,22 @@ void vkglTF::Model::prepareNodeDescriptor(vkglTF::Node* node, VkDescriptorSetLay
 		prepareNodeDescriptor(child, descriptorSetLayout);
 	}
 }
+
+void updateChildPrevMatrix(vkglTF::Node* node)
+{
+	if (!node->visible)
+		return;
+	if (node->mesh)
+		node->mesh->updatePrevMatrix();
+	for (auto& child : node->children) {
+		updateChildPrevMatrix(child);
+	}
+}
+void vkglTF::Model::updatePrevMatrix()
+{
+	for (auto& node : nodes) {
+		if (!node->visible)
+			continue;
+		updateChildPrevMatrix(node);
+	}
+}

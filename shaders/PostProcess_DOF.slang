@@ -69,7 +69,7 @@ float4 fragmentMain(VSOutput input)
     float weightSum = 0.0;
     float4 finalColor = float4(0.0, 0.0, 0.0, 0.0);
 
-    // 采样周围像素（反向映射：从周围像素向中心采样）
+    // 目前采用的双重循环采样性能较低，后续可以优化为分离轴高斯模糊
     for (int y = -sampleRadius; y <= sampleRadius; y++) {
         for (int x = -sampleRadius; x <= sampleRadius; x++) {
             // 计算采样偏移
