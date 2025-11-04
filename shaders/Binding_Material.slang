@@ -6,6 +6,8 @@ struct MaterialParameters
     float alphaCutoff = 1.0f;
     float metallicFactor = 1.0f;
     float roughnessFactor = 1.0f;
+    float anisotropicFactor = 0.0f;
+    float4 tangent = float4(0.0f);
     float baseColorTextureEmpty;
     float normalTextureEmpty;
     float mergeMetallicRoughnessTexture;

@@ -1275,6 +1275,8 @@ void vkUtils::DrawNodePropertiesPanel()
 			ImGui::SliderFloat("Metallic Factor", &material.materialParameters.metallicFactor, 0.0f, 1.0f);
 			ImGui::SliderFloat("Roughness Factor", &material.materialParameters.roughnessFactor, 0.0f, 1.0f);
 			ImGui::SliderFloat("Alpha Cutoff", &material.materialParameters.alphaCutoff, 0.0f, 1.0f);
+			ImGui::SliderFloat("Anisotropic Factor", &material.materialParameters.anisotropicFactor, -1.0f, 1.0f);
+			ImGui::InputFloat4("tangent", &material.materialParameters.tangent.x);
 
 			const char* alphaModes[] = { "Opaque", "Mask", "Blend" };
 			ImGui::Combo("Alpha Mode", (int*)&material.alphaMode, alphaModes, IM_ARRAYSIZE(alphaModes));

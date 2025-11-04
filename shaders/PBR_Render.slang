@@ -4,6 +4,7 @@ import "Binding_Light.slang";
 import "Binding_Material.slang";
 import "Binding_Mesh.slang";
 import "MotionVector.slang";
+import "BRDF.slang";
 
 struct VSOutput
 {
@@ -25,45 +26,6 @@ struct FSOutput
 // 0：不透明  1：遮罩  2：半透明
 [SpecializationConstant] const int ALPHAMODE = 0;
 #define PI 3.1415926535897932384626433832795
-
-// 法线分布函数(D)：GGX模型
-// 描述微平面的朝向分布，决定高光的形状和集中度
-// dotNH: 法向量与半程向量的点积
-// roughness: 粗糙度，值越大表面越粗糙
-float D_GGX(float dotNH, float roughness)
-{
-	float alpha = roughness * roughness;
-	float alpha2 = alpha * alpha;
-	float denom = dotNH * dotNH * (alpha2 - 1.0) + 1.0;
-	return (alpha2)/(PI * denom*denom);
-}
-
-// 几何函数(G)：Schlick-Smith GGX模型
-// 模拟微平面之间的相互遮挡，影响高光的衰减
-// dotNL: 法向量与光线方向的点积
-// dotNV: 法向量与观察方向的点积
-float G_SchlicksmithGGX(float dotNL, float dotNV, float roughness)
-{
-	float r = (roughness + 1.0);
-	float k = (r*r) / 8.0;
-	float GL = dotNL / (dotNL * (1.0 - k) + k);
-	float GV = dotNV / (dotNV * (1.0 - k) + k);
-	return GL * GV;
-}
-
-// 菲涅尔函数(F)：Schlick近似
-// 描述不同角度下光线的反射率变化，边缘通常反射更强
-// cosTheta: 入射角的余弦值（观察方向与法向量的夹角）
-// F0: 基础反射率（0度入射角时的反射率）
-float3 F_Schlick(float cosTheta, float3 F0)
-{
-	return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
-}
-// 改进的菲涅尔函数，考虑粗糙度影响
-float3 F_SchlickR(float cosTheta, float3 F0, float roughness)
-{
-	return F0 + (max((1.0 - roughness).xxx, F0) - F0) * pow(1.0 - cosTheta, 5.0);
-}
 
 // 预过滤环境反射采样
 // 根据粗糙度选择不同级别的mipmap，实现模糊的反射效果
@@ -154,44 +116,117 @@ float3 specularContribution(float3 albedoColor, float3 lightColor, float3 L, flo
 
 	return color;
 }
+
+// 计算各向异性镜面反射贡献
+float3 anisSpecularContribution(float3 albedoColor, float3 lightColor, float3 L, float3 V, float3 N, float3 F0, float metallic, float roughness, float attenuation, 
+                          float3 X, float3 Y,  float anisotropy)
+{
+    float3 H = normalize(V + L);
+
+    // 计算各种点积
+    float dotNV = dot(N, V);
+    float dotNL = dot(N, L);
+    float dotVL = dot(V, L);
+
+    float dotNX = dot(N, X); // 通常为0，因为X与N正交
+    float dotNY = dot(N, Y); // 通常为0，因为Y与N正交
+    float dotLX = dot(L, X);
+    float dotLY = dot(L, Y);
+
+    float dotXV = dot(X, V);
+    float dotYV = dot(Y, V);
+    float dotXL = dot(X, L);
+    float dotYL = dot(Y, L);
+
+    float InvLenH = rsqrt(2 + 2 * dotVL);
+    float dotNH = clamp((dotNL + dotNV) * InvLenH, 0.0, 1.0);
+    float dotVH = clamp(InvLenH + InvLenH * dotVL, 0.0, 1.0);
+    float dotXH = (dotXL + dotXV) * InvLenH;
+    float dotYH = (dotYL + dotYV) * InvLenH;
+
+    float3 color = float3(0.0, 0.0, 0.0);
+    if (dotNL > 0.0) {
+        // 计算各向异性粗糙度参数
+        float ax, ay;
+        getAnisotropicRoughness(roughness * roughness, anisotropy, ax, ay);
+
+        // 各向异性NDF 
+        float D = D_GGXaniso(dotNH, dotXH, dotYH, ax, ay);
+        // 各向异性几何函数
+        float G = G_SmithJointAniso(ax, ay, dotNV, dotNL, dotXV, dotXL, dotYV, dotYL);
+        // 菲涅尔函数
+        float3 F = F_Schlick(dotVH, F0);
+         
+        // 计算镜面反射项
+        float3 spec = D * F * G / (4.0 * dotNL * dotNV + 0.001);
+
+        // 计算漫反射系数
+        float3 kD = (float3(1.0, 1.0, 1.0) - F) * (1.0 - metallic);
+
+        // 累加光照贡献
+        color += (kD * albedoColor / PI + spec) * dotNL * lightColor * attenuation;
+    }
+
+    return color;
+}
 bool isZeroVector(float3 v) {
     float lenSq = dot(v, v);
     return lenSq < 1e-9;
 }
+
+struct NormalInfo
+{
+    float3 T; // 切线
+    float3 B; // 副切线
+    float3 N; // 法线
+    float3x3 TBN; // TBN矩阵
+};
 // 计算世界空间中的法向量（考虑法线贴图）
 // 从法线纹理中采样并通过TBN矩阵转换到世界空间
-float3 calculateNormal(VSOutput input)
+NormalInfo calculateNormal(VSOutput input)
 {
-    if(materialParameters.normalTextureEmpty != 0)
-    {
-        return normalize(input.Normal);
-    }
-
-    // 从法线纹理采样并转换范围：[0,1] → [-1,1]
-    float3 tangentNormal = normalTexture.Sample(input.UV).xyz * 2.0 - 1.0;
-
-    // 构建TBN矩阵（切线-副切线-法线矩阵）
     // 世界空间法向量
 	float3 N = normalize(input.Normal);
     // 世界空间切线向量
-    float3 T = normalize(input.Tangent);
-    if (isZeroVector(input.Tangent))
+    float3 T;
+    if (materialParameters.anisotropicFactor != 0.f && !isZeroVector(materialParameters.tangent.xyz))
     {
-        // 计算世界空间位置和纹理坐标的导数
-        float3 dPdx = ddx(input.WorldPos);
-        float3 dPdy = ddy(input.WorldPos);
-        float2 dUVdx = ddx(input.UV);
-        float2 dUVdy = ddy(input.UV);
-
-        // 求解切线向量
-        float3 T = normalize(dPdx * dUVdy.y - dPdy * dUVdx.y);
+        T = normalize(materialParameters.tangent.xyz);
     }
+    else
+    {
+        T = normalize(input.Tangent);
+        if (isZeroVector(input.Tangent))
+        {
+            // 计算世界空间位置和纹理坐标的导数
+            float3 dPdx = ddx(input.WorldPos);
+            float3 dPdy = ddy(input.WorldPos);
+            float2 dUVdx = ddx(input.UV);
+            float2 dUVdy = ddy(input.UV);
+
+            // 求解切线向量
+            T = normalize(dPdx * dUVdy.y - dPdy * dUVdx.y);
+        }
+    }
+
     // 计算副切线向量
 	float3 B = normalize(cross(N, T));
+    // 构建TBN矩阵（切线-副切线-法线矩阵）
 	float3x3 TBN = transpose(float3x3(T, B, N));
 
-    // 将切线空间的法线转换到世界空间
-	return normalize(mul(TBN, tangentNormal));
+    NormalInfo normalInfo;
+    normalInfo.T = T;
+    normalInfo.B = B;
+    normalInfo.N = N;
+    normalInfo.TBN = TBN;
+
+    if (materialParameters.normalTextureEmpty == 0)
+    {
+        // 从法线纹理采样并转换范围：[0,1] → [-1,1]
+        float3 tangentNormal = normalTexture.Sample(input.UV).xyz * 2.0 - 1.0;
+        normalInfo.N = normalize(mul(TBN, tangentNormal));
+    }
+    return normalInfo;
 }
 
 // 偏置矩阵，用于将坐标从[-1, 1]范围（标准化设备坐标 NDC）转换为[0, 1]范围（纹理采样坐标）
@@ -220,7 +255,8 @@ VSOutput vertexMain(VSInput input)
 [shader("fragment")]
 FSOutput fragmentMain(VSOutput input)
 {
-	float3 N = calculateNormal(input);
+    NormalInfo normalInfo = calculateNormal(input);
+    float3 N = normalInfo.N;
 	float3 V = normalize(globalParams.camPos - input.WorldPos);
     float3 R = reflect(-V, N);
     // 初始化默认金属度和粗糙度（1.0为默认值）
@@ -306,7 +342,15 @@ FSOutput fragmentMain(VSOutput input)
             float attenuation = calculateAttenuation(distance, lightParameter.pointLights[i].range, lightParameter.pointLights[i].attenuationMode);
 
             // 累加每个光源的贡献（已包含衰减）
-            Lo += shadowFactor * specularContribution(albedoColor.rgb, lightParameter.pointLights[i].color.xyz, L, V, N, F0,  metallic, roughness, attenuation);
+            if(materialParameters.anisotropicFactor != 0.0)
+            {
+                Lo += shadowFactor * anisSpecularContribution(albedoColor.rgb, lightParameter.pointLights[i].color.xyz, L, V, N, F0, metallic, roughness, attenuation,
+                                                        normalInfo.T, normalInfo.B, materialParameters.anisotropicFactor);
+            }
+            else
+            {
+                Lo += shadowFactor * specularContribution(albedoColor.rgb, lightParameter.pointLights[i].color.xyz, L, V, N, F0, metallic, roughness, attenuation);        
+            }
         }
     }
     uint cascadeIndex = 0;
@@ -331,7 +375,15 @@ FSOutput fragmentMain(VSOutput input)
 
         float3 lightDir = lightParameter.directLight.direct.xyz;
         float3 L = normalize(lightDir);
-        Lo += shadow * specularContribution(albedoColor.rgb, lightParameter.directLight.color.xyz, L, V, N, F0, metallic, roughness, 1.0);
+        if (materialParameters.anisotropicFactor != 0.0)
+        {
+            Lo += shadow * anisSpecularContribution(albedoColor.rgb, lightParameter.directLight.color.xyz, L, V, N, F0, metallic, roughness, 1.0,
+                                                normalInfo.T, normalInfo.B, materialParameters.anisotropicFactor);            
+        }
+        else
+        {
+            Lo += shadow * specularContribution(albedoColor.rgb, lightParameter.directLight.color.xyz, L, V, N, F0, metallic, roughness, 1.0);
+        }
     }
 
     // 采样BRDF查找表，获取环境镜面反射的预计算值
@@ -371,8 +423,8 @@ FSOutput fragmentMain(VSOutput input)
     
     FSOutput output;
     output.color = float4(color, albedoColor.a);
+    //output.color = float4(normalInfo.T, albedoColor.a);
     output.motionVector = Calculate3DVelocity(input.currentClipPos, input.prevClipPos, globalParams.jitter);
-    //bool tmp;
-    //output.color.rgb = DecodeVelocity(output.motionVector,tmp) * 10;
+
     return output;
 }

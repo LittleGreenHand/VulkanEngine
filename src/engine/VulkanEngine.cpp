@@ -10,12 +10,12 @@ VulkanEngine::VulkanEngine() : VulkanEngineBase()
 {
 	title = "VulkanEngine";
 	camera.type = Camera::CameraType::firstperson;
-	camera.movementSpeed = 8.0f;
+	camera.movementSpeed = 0.5f;
 	camera.setPerspective(60.0f, (float)width / (float)height, 0.01f, 256.0f);
 
-	camera.rotationSpeed = 0.25f;
+	camera.rotationSpeed = 0.15f;
 	camera.setRotation({ 0.0f, 0.0f, 0.0f });
-	camera.setPosition({ 0.f, 0.f, 0.f });
+	camera.setPosition({ 0.f, 0.f, -1.f });
 
 	camera.focusDistance = 1.0f;
 	camera.focusRange = 1.0f;
@@ -138,8 +138,9 @@ void VulkanEngine::loadAssets()
 		models[M_Cerberus].linearNodes[0]->mesh->primitives[0]->material.materialParameters.roughnessFactor = 1;
 		models[M_Cerberus].nodes[0]->clearTransform();
 		models[M_Cerberus].nodes[0]->rotation = vkUtils::eularToQuaternion(glm::vec3(-90, 90, 0));
-		models[M_Cerberus].nodes[0]->translation = (glm::vec3(0.2, -0.15, -0.5));
+		models[M_Cerberus].nodes[0]->translation = (glm::vec3(0.2, -0.15, -2.5));
 		models[M_Cerberus].nodes[0]->scale = (glm::vec3(0.2, 0.2, 0.2));
+		models[M_Cerberus].nodes[0]->visible = false;
 		models[M_Cerberus].nodes[0]->update(); 
 
 		models[M_Cube].loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, queue, glTFLoadingFlags);
@@ -159,8 +160,11 @@ void VulkanEngine::loadAssets()
 		models[M_Sphere].loadFromFile(getAssetPath() + "models/sphere.gltf", vulkanDevice, queue, glTFLoadingFlags);
 		models[M_Sphere].nodes[0]->clearTransform();
 		models[M_Sphere].nodes[0]->scale = (glm::vec3(0.1, 0.1, 0.1));
-		models[M_Sphere].nodes[0]->translation = (glm::vec3(0, -0, -1));
-		models[M_Sphere].nodes[0]->visible = false;
+		models[M_Sphere].nodes[0]->translation = (glm::vec3(0, -0, -2));
+		models[M_Sphere].nodes[0]->visible = true;
+		models[M_Sphere].materials[0].materialParameters.baseColorFactor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+		models[M_Sphere].materials[0].materialParameters.metallicFactor = 0.0f;
+		models[M_Sphere].materials[0].materialParameters.roughnessFactor = 0.5f;
 		models[M_Sphere].nodes[0]->update();
 
 		models[M_Sponza].loadFromFile(getAssetPath() + "models/sponza/sponza.gltf", vulkanDevice, queue, glTFLoadingFlags);
@@ -537,7 +541,7 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 		ImGui::Indent();
 		{
 			ImGui::SliderFloat("移动速度", &camera.movementSpeed, 0.1f, 10);
-			ImGui::SliderFloat("旋转速度", &camera.rotationSpeed, 0.1f, 10);
+			ImGui::SliderFloat("旋转速度", &camera.rotationSpeed, 0.1f, 1.f);
 			ImGui::InputFloat3("位置", (float*)&camera.position);
 			ImGui::InputFloat3("旋转", (float*)&camera.rotation);
 			ImGui::Checkbox("景深", &camera.enableDOF);

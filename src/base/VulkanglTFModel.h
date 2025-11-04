@@ -90,7 +90,7 @@ namespace vkglTF
 	static void createMaterialDescriptorSetLayout(VkDevice device) {
 		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings{};
 		//这个缓冲区用于存储材质参数
-		setLayoutBindings.push_back(vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 0));
+		setLayoutBindings.push_back(vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0));
 
 		for (int i = 0; i < imageDescriptorBindingCount; i++)
 		{
@@ -126,6 +126,8 @@ namespace vkglTF
 			float alphaCutoff = 1.0f;
 			float metallicFactor = 1.0f;
 			float roughnessFactor = 1.0f;
+			float anisotropicFactor = 0.0f;//各向异性强度，0表示不使用各向异性，值为[-1, 1]
+			glm::vec4 tangent = glm::vec4(0.0f);//如果是零向量，则表示使用物体本身的切线，否则使用该切线
 			float baseColorTextureEmpty = true;
 			float normalTextureEmpty = true;
 			float mergeMetallicRoughnessTexture = true;

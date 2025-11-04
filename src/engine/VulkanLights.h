@@ -29,7 +29,7 @@ namespace vkLight
 		int cascadeCount = 3; //实际使用的级联数量
 		int usePCF = 1;
 		int colorCascades = 0;
-		int isRnder = 0;
+		int isRnder = 1;
 
 	};
 	struct alignas(16) LightUbo {
