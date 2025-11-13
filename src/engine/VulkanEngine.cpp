@@ -189,7 +189,6 @@ void VulkanEngine::loadAssets()
 	{
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)offscreenTexture[0].image, "offscreenTexture0");
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)offscreenTexture[1].image, "offscreenTexture1");
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)motionVector.image, "motionVector");
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.environmentCube.image, "environmentCube");
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.albedoMap.image, "albedoMap");
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.normalMap.image, "normalMap");
@@ -198,6 +197,8 @@ void VulkanEngine::loadAssets()
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.roughnessMap.image, "roughnessMap");
 		for (int i = 0; i < swapChain.swapChainImages.size(); i++)
 			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)swapChain.swapChainImages[i].image, ("swapchainImage" + std::to_string(i)));
+		for (int i = 0; i < GBufferCount; i++)
+			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)gBuffer.texture[i].image, GBufferNames[i]);
 	}
 
 	auto tEnd = std::chrono::high_resolution_clock::now(); 
@@ -224,7 +225,12 @@ void VulkanEngine::prepareDescriptors()
 		VkDescriptorSetLayoutCreateInfo descriptorLayoutCI = vks::initializers::descriptorSetLayoutCreateInfo(nullptr, 0);
 
 		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-			vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0)};
+			vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0),
+		};
+		for (int i = 0; i < GBufferCount; i++)
+		{
+			setLayoutBindings.push_back(vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1 + i));
+		}
 		descriptorLayoutCI = vks::initializers::descriptorSetLayoutCreateInfo(setLayoutBindings);
 		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &setLayouts[LBI_GLOBAL]));
 		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)setLayouts[LBI_GLOBAL], "globalParamDescriptorSetLayout");
@@ -249,8 +255,11 @@ void VulkanEngine::prepareDescriptors()
 			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)globalDescriptorSets[i], "frameDescriptorSets[" + std::to_string(i) + "].globalParamDescriptorSet ");
 
 			// 更新描述符集
-			std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
-				vks::initializers::writeDescriptorSet(globalDescriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &globalParamBuffers[i].globalParamBuffer.descriptor) };
+			std::vector<VkWriteDescriptorSet> writeDescriptorSets = {vks::initializers::writeDescriptorSet(globalDescriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &globalParamBuffers[i].globalParamBuffer.descriptor)};
+			for (int id = 0; id < GBufferCount; id++)
+			{
+				writeDescriptorSets.push_back(vks::initializers::writeDescriptorSet(globalDescriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 + id, &gBuffer.texture[id].descriptor));
+			}
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
 		}
 
@@ -288,8 +297,8 @@ void VulkanEngine::preparePipelines()
 	//skybox pipeline
 	{
 		PipelineBuilder builder(device);
-		VkPipelineColorBlendAttachmentState colorBlendAttachments[2] = { vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE), vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE) };
-		builder.colorBlendState = vks::initializers::pipelineColorBlendStateCreateInfo(2, colorBlendAttachments);
+		VkPipelineColorBlendAttachmentState colorBlendAttachments[1] = { vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE)};
+		builder.colorBlendState = vks::initializers::pipelineColorBlendStateCreateInfo(1, colorBlendAttachments);
 
 		std::vector<VkDescriptorSetLayout> setLayoutsVector;
 		setLayoutsVector.resize(2);
@@ -316,38 +325,94 @@ void VulkanEngine::preparePipelines()
 		setLayoutsVector[LBI_MATERIALS] = setLayouts[LBI_MATERIALS];
 		setLayoutsVector[LBI_MESH] = setLayouts[LBI_MESH];
 		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(setLayoutsVector);
-		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_PBR_OPAQUE].layout));
-		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_PBR_MASK].layout));
 		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_PBR_BLEND].layout));
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_PBR_DEFER_GEOMETRY_Opaque].layout));
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_PBR_DEFER_GEOMETRY_AlphaMasked].layout));
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelines[PL_PBR_DEFER_LIGHTING].layout));
 
-		PipelineBuilder builder(device);
-		//启用深度测试与写入
-		builder.depthStencilState.depthWriteEnable = VK_TRUE;
-		builder.depthStencilState.depthTestEnable = VK_TRUE;
-		builder.addShaderStage(loadShader(getShadersPath() + "PBR_Render.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
-		builder.addShaderStage(loadShader(getShadersPath() + "PBR_Render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
-		VkPipelineColorBlendAttachmentState colorBlendAttachments[2] = { vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE), vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE) };
-		builder.colorBlendState = vks::initializers::pipelineColorBlendStateCreateInfo(2, colorBlendAttachments);
+		//不透明与遮罩物体的延迟渲染几何阶段。用于生成GBuffer
+		{
+			PipelineBuilder builder(device);
+			builder.depthStencilState.depthWriteEnable = VK_TRUE;
+			builder.depthStencilState.depthTestEnable = VK_TRUE;
+			builder.addShaderStage(loadShader(getShadersPath() + "PBR_deferMRT.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
+			builder.addShaderStage(loadShader(getShadersPath() + "PBR_deferMRT.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
 
-		//通过特化常量设置不同的透明度模式
-		uint32_t ALPHAMODE;
-		VkSpecializationMapEntry specializationMapEntry = vks::initializers::specializationMapEntry(0, 0, sizeof(uint32_t));
-		VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(1, &specializationMapEntry, sizeof(uint32_t), &ALPHAMODE);
-		builder.shaderStages[1].pSpecializationInfo = &specializationInfo;
+			//通过特化常量设置透明度模式和渲染模式
+			std::array<int32_t, 1> SpecializationConstant;
+			VkSpecializationMapEntry specializationMapEntry[1] = { vks::initializers::specializationMapEntry(0, 0, sizeof(int32_t)) };
+			VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(1, specializationMapEntry, sizeof(SpecializationConstant), SpecializationConstant.data());
+			builder.shaderStages[0].pSpecializationInfo = &specializationInfo;
+			builder.shaderStages[1].pSpecializationInfo = &specializationInfo;
 
-		ALPHAMODE = 0;
-		builder.buildPipeline(mainRenderPass.renderPass, pipelineCache, pipelines[PL_PBR_OPAQUE].layout, pipelines[PL_PBR_OPAQUE].pipeline);
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_PBR_OPAQUE].pipeline, "PBR_OPAQUE pipeline");
+			//设置多渲染目标
+			VkPipelineColorBlendAttachmentState colorBlendAttachments[GBufferCount];
+			for (int i = 0; i < GBufferCount; i++)
+			{
+				colorBlendAttachments[i] = vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE);
+			}
+			builder.colorBlendState = vks::initializers::pipelineColorBlendStateCreateInfo(GBufferCount, colorBlendAttachments);
+			VkPipelineRenderingCreateInfo renderInfo = vks::initializers::pipelineRenderingCreateInfo(GBufferCount, GBufferFormats);
+			renderInfo.depthAttachmentFormat = depthFormat;
+			renderInfo.stencilAttachmentFormat = depthFormat;
 
-		ALPHAMODE = 1;
-		builder.buildPipeline(mainRenderPass.renderPass, pipelineCache, pipelines[PL_PBR_MASK].layout, pipelines[PL_PBR_MASK].pipeline);
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_PBR_MASK].pipeline, "PBR_MASK pipeline");
+			SpecializationConstant[0] = 0;//不透明模式
+			builder.buildPipeline(renderInfo, pipelineCache, pipelines[PL_PBR_DEFER_GEOMETRY_Opaque].layout, pipelines[PL_PBR_DEFER_GEOMETRY_Opaque].pipeline);
+			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_PBR_DEFER_GEOMETRY_Opaque].pipeline, "PL_PBR_DEFER_GEOMETRY_Opaque pipeline");
 
-		ALPHAMODE = 2;
-		builder.depthStencilState.depthWriteEnable = VK_FALSE;
-		builder.enableBlendingAlphaBlend();
-		builder.buildPipeline(mainRenderPass.renderPass, pipelineCache, pipelines[PL_PBR_BLEND].layout, pipelines[PL_PBR_BLEND].pipeline);
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_PBR_BLEND].pipeline, "PBR_BLEND pipeline");
+			SpecializationConstant[0] = 1;//遮罩模式
+			builder.buildPipeline(renderInfo, pipelineCache, pipelines[PL_PBR_DEFER_GEOMETRY_AlphaMasked].layout, pipelines[PL_PBR_DEFER_GEOMETRY_AlphaMasked].pipeline);
+			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_PBR_DEFER_GEOMETRY_AlphaMasked].pipeline, "PL_PBR_DEFER_GEOMETRY_AlphaMasked pipeline");
+		}
+
+		//PBR延迟渲染光照管线
+		//透明物体前向渲染管线
+		{
+			PipelineBuilder builder(device);
+			builder.depthStencilState.depthWriteEnable = VK_FALSE;//禁用深度写入
+			builder.depthStencilState.depthTestEnable = VK_FALSE;//启用深度测试
+			builder.setRasterizationState(VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
+			builder.addShaderStage(loadShader(getShadersPath() + "PBR_fullScreen.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
+			builder.addShaderStage(loadShader(getShadersPath() + "PBR_Render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
+			VkPipelineColorBlendAttachmentState colorBlendAttachments[1] = {
+				vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE)
+			};
+			builder.colorBlendState = vks::initializers::pipelineColorBlendStateCreateInfo(1, colorBlendAttachments);
+
+			//通过特化常量设置透明度模式和渲染模式
+			struct SpecializationData {
+				int32_t ALPHAMODE;
+				int32_t RENDER_MODE;
+			} specializationData;
+			std::array<VkSpecializationMapEntry, 2> specializationMapEntries;
+			specializationMapEntries[0].constantID = 0;
+			specializationMapEntries[0].size = sizeof(specializationData.ALPHAMODE);
+			specializationMapEntries[0].offset = 0;
+			specializationMapEntries[1].constantID = 1;
+			specializationMapEntries[1].size = sizeof(specializationData.RENDER_MODE);
+			specializationMapEntries[1].offset = offsetof(SpecializationData, RENDER_MODE);
+			VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(specializationMapEntries.size(), specializationMapEntries.data(), sizeof(specializationData), &specializationData);
+			builder.shaderStages[0].pSpecializationInfo = &specializationInfo;
+			builder.shaderStages[1].pSpecializationInfo = &specializationInfo;
+
+			//不透明与遮罩物体的延迟渲染光照阶段
+			specializationData.RENDER_MODE = 1;//延迟渲染模式
+			specializationData.ALPHAMODE = 0;//不透明模式
+			builder.buildPipeline(mainRenderPass.renderPass, pipelineCache, pipelines[PL_PBR_DEFER_LIGHTING].layout, pipelines[PL_PBR_DEFER_LIGHTING].pipeline);
+			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_PBR_DEFER_LIGHTING].pipeline, "PL_PBR_DEFER_LIGHTING pipeline");
+
+			//透明物体前向渲染管线
+			builder.shaderStages.clear();
+			builder.addShaderStage(loadShader(getShadersPath() + "PBR_Render.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
+			builder.addShaderStage(loadShader(getShadersPath() + "PBR_Render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
+			builder.shaderStages[0].pSpecializationInfo = &specializationInfo;
+			builder.shaderStages[1].pSpecializationInfo = &specializationInfo;
+			specializationData.RENDER_MODE = 0;//前向渲染模式
+			specializationData.ALPHAMODE = 2;//透明模式
+			builder.enableBlendingAlphaBlend();
+			builder.buildPipeline(mainRenderPass.renderPass, pipelineCache, pipelines[PL_PBR_BLEND].layout, pipelines[PL_PBR_BLEND].pipeline);
+			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_PBR_BLEND].pipeline, "PBR_BLEND pipeline");
+		}
 	}
 
 	auto tEnd = std::chrono::high_resolution_clock::now();
@@ -408,83 +473,136 @@ void VulkanEngine::buildCommandBuffer()
 
 	VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
 
-	//绘制方向光和点光的阴影贴图	
-	directLight.Render(cmdBuffer);
-	pointLights.Render(cmdBuffer);
-
-	VkClearValue clearValues[3]{};
-	clearValues[0].color = { { 0.25f, 0.25f, 0.25f, 1.0f } };;
-	clearValues[1].depthStencil = { 1.0f, 0 };
-	clearValues[2].color = { {0.0f, 0.0f, 0.0f, 0.0f} };
-
-	VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
-	renderPassBeginInfo.renderPass = mainRenderPass.renderPass;
-	renderPassBeginInfo.renderArea.offset.x = 0;
-	renderPassBeginInfo.renderArea.offset.y = 0;
-	renderPassBeginInfo.renderArea.extent.width = width;
-	renderPassBeginInfo.renderArea.extent.height = height;
-	renderPassBeginInfo.clearValueCount = 3;
-	renderPassBeginInfo.pClearValues = clearValues;
-	renderPassBeginInfo.framebuffer = mainRenderPass.frameBuffers[0];
-
-	const VkViewport viewport = vks::initializers::viewport((float)width, (float)height, 0.0f, 1.0f);
-	const VkRect2D scissor = vks::initializers::rect2D(width, height, 0, 0);
-
-	vkCmdBeginRenderPass(cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-	vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
-	vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
-
 	const int descriptorSetCount = 3;
 	std::vector<VkDescriptorSet> descriptorSetsArray(descriptorSetCount);
 	descriptorSetsArray[LBI_GLOBAL] = globalDescriptorSets[currentBuffer];
 	descriptorSetsArray[LBI_IBL] = IBLDescriptorSet;
 	descriptorSetsArray[LBI_LIGHTS] = vkLight::descriptorSet;
-
-	// Skybox
-	if (displaySkybox)
+	//资源预处理
 	{
-		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline skybox", { 1.0f, 1.0f, 1.0f });
-		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_Skybox].pipeline);
-		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_Skybox].layout, 0, 2, descriptorSetsArray.data(), 0, nullptr);
-		skybox.draw(cmdBuffer);//不需要绑定材质描述符集
-		vkUtils::cmdEndLabel(cmdBuffer);
+		//绘制方向光和点光的阴影贴图	
+		directLight.Render(cmdBuffer);
+		pointLights.Render(cmdBuffer);
+
+		//几何Pass，为不透明和遮罩物体生成GBuffer
+		{
+			vkUtils::cmdBeginLabel(cmdBuffer, "PBR_DEFER_GEOMETRY", { 1.0f, 1.0f, 1.0f });
+			const VkViewport viewport = vks::initializers::viewport((float)width, (float)height, 0.0f, 1.0f);
+			const VkRect2D scissor = vks::initializers::rect2D(width, height, 0, 0);
+			vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
+			vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
+
+
+			//设置动态渲染信息
+			const int colorAttachmentCount = GBufferCount;
+			VkRenderingAttachmentInfo colorAttachment[colorAttachmentCount]; 
+			VkClearValue clearValues;
+			clearValues.color = { { 0.25f, 0.25f, 0.25f, 1.0f } };
+			for (int i = 0; i < GBufferCount; i++)
+			{
+				colorAttachment[i] = vks::initializers::RenderingAttachmentInfo_Color(gBuffer.texture[i].view, &clearValues, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+				vkUtils::transitionImageLayout(cmdBuffer, gBuffer.texture[i], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);//转换布局
+			}
+			VkRenderingAttachmentInfo depthAttachment = vks::initializers::RenderingAttachmentInfo_Depth(depthStencil.view);
+			depthAttachment.clearValue.depthStencil = { 1.0f, 0 };
+			vkUtils::transitionImageLayout(cmdBuffer, depthStencil, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
+			VkRenderingInfo renderInfo = vks::initializers::RenderingInfo({ width, height }, colorAttachmentCount, colorAttachment, &depthAttachment);
+
+			//开始动态渲染
+			vkCmdBeginRendering(cmdBuffer, &renderInfo);
+			{
+				//绘制不透明物体
+				vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_DEFER_GEOMETRY_Opaque].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
+				vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_DEFER_GEOMETRY_Opaque].pipeline);
+				for (auto& [key, model] : models)
+				{
+					model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial | vkglTF::RenderFlags::RenderOpaqueNodes, pipelines[PL_PBR_DEFER_GEOMETRY_Opaque].layout);
+				}
+
+				//绘制遮罩物体
+				vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_DEFER_GEOMETRY_AlphaMasked].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
+				vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_DEFER_GEOMETRY_AlphaMasked].pipeline);
+				for (auto& [key, model] : models)
+				{
+					model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial | vkglTF::RenderFlags::RenderAlphaMaskedNodes, pipelines[PL_PBR_DEFER_GEOMETRY_AlphaMasked].layout);
+				}
+			}
+			vkCmdEndRendering(cmdBuffer);
+			vkUtils::cmdEndLabel(cmdBuffer);
+		}
 	}
 
-	//PBR
+	//转换GBuffer布局
+	for (int i = 0; i < GBufferCount; i++)
 	{
-		//不透明物体
-		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline PBR_OPAQUE", { 1.0f, 1.0f, 1.0f });
-		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_OPAQUE].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
-		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_OPAQUE].pipeline);
-		for (auto& [key, model] : models)
-		{
-			model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial | vkglTF::RenderFlags::RenderOpaqueNodes, pipelines[PL_PBR_OPAQUE].layout);
-		}
-		vkUtils::cmdEndLabel(cmdBuffer);
-
-		//遮罩物体
-		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline PBR_MASK", { 1.0f, 1.0f, 1.0f });
-		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_MASK].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
-		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_MASK].pipeline);
-		for (auto& [key, model] : models)
-		{
-			model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial | vkglTF::RenderFlags::RenderAlphaMaskedNodes, pipelines[PL_PBR_MASK].layout);
-		}
-		vkUtils::cmdEndLabel(cmdBuffer);
-
-		//透明物体
-		vkUtils::cmdBeginLabel(cmdBuffer, "Pipeline PBR_BLEND", { 1.0f, 1.0f, 1.0f });
-		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_BLEND].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
-		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_BLEND].pipeline);
-		for (auto& [key, model] : models)
-		{
-			model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial | vkglTF::RenderFlags::RenderAlphaBlendedNodes, pipelines[PL_PBR_BLEND].layout);
-		}
-		vkUtils::cmdEndLabel(cmdBuffer);
-
+		vkUtils::transitionImageLayout(cmdBuffer, gBuffer.texture[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 
-	vkCmdEndRenderPass(cmdBuffer);
+	//主渲染Pass
+	{
+		VkClearValue clearValues[3]{};
+		clearValues[0].color = { { 0.25f, 0.25f, 0.25f, 1.0f } };;
+		clearValues[1].depthStencil = { 1.0f, 0 };
+		clearValues[2].color = { {0.0f, 0.0f, 0.0f, 0.0f} };
+
+		VkRenderPassBeginInfo renderPassBeginInfo = vks::initializers::renderPassBeginInfo();
+		renderPassBeginInfo.renderPass = mainRenderPass.renderPass;
+		renderPassBeginInfo.renderArea.offset.x = 0;
+		renderPassBeginInfo.renderArea.offset.y = 0;
+		renderPassBeginInfo.renderArea.extent.width = width;
+		renderPassBeginInfo.renderArea.extent.height = height;
+		renderPassBeginInfo.clearValueCount = 3;
+		renderPassBeginInfo.pClearValues = clearValues;
+		renderPassBeginInfo.framebuffer = mainRenderPass.frameBuffers[0];
+
+		const VkViewport viewport = vks::initializers::viewport((float)width, (float)height, 0.0f, 1.0f);
+		const VkRect2D scissor = vks::initializers::rect2D(width, height, 0, 0);
+		vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
+		vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
+
+		vkUtils::transitionImageLayout(cmdBuffer, depthStencil, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
+		vkCmdBeginRenderPass(cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		// Skybox
+		if (displaySkybox)
+		{
+			vkUtils::cmdBeginLabel(cmdBuffer, "Skybox", { 1.0f, 1.0f, 1.0f });
+			vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_Skybox].pipeline);
+			vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_Skybox].layout, 0, 2, descriptorSetsArray.data(), 0, nullptr);
+			skybox.draw(cmdBuffer);//不需要绑定材质描述符集
+			vkUtils::cmdEndLabel(cmdBuffer);
+		}
+
+		//PBR
+		{
+			//不透明与遮罩物体的延迟渲染光照阶段
+			{
+				vkUtils::cmdBeginLabel(cmdBuffer, "PBR_DEFER_LIGHTING", { 1.0f, 1.0f, 1.0f });
+				vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_DEFER_LIGHTING].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
+				vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_DEFER_LIGHTING].pipeline);
+				vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
+				//for (auto& [key, model] : models)
+				//{
+				//	model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial | vkglTF::RenderFlags::RenderOpaqueNodes, pipelines[PL_PBR_DEFER_GEOMETRY_Opaque].layout);
+				//}
+				vkUtils::cmdEndLabel(cmdBuffer);
+			}
+
+			//透明物体的前向渲染
+			{
+				vkUtils::cmdBeginLabel(cmdBuffer, "PBR_AlphaBLEND", { 1.0f, 1.0f, 1.0f });
+				vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_BLEND].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
+				vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_BLEND].pipeline);
+				for (auto& [key, model] : models)
+				{
+					model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial | vkglTF::RenderFlags::RenderAlphaBlendedNodes, pipelines[PL_PBR_BLEND].layout);
+				}
+				vkUtils::cmdEndLabel(cmdBuffer);
+			}
+		}
+
+		vkCmdEndRenderPass(cmdBuffer);
+	}
 	//更新布局
 	offscreenTexture[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	depthStencil.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
@@ -500,12 +618,20 @@ void VulkanEngine::buildCommandBuffer()
 			postProcessManager->dofProcess->excute(cmdBuffer, offscreenTexture[0].descriptor, depthStencil.descriptor, offscreenTexture[1].view);
 			vkUtils::copyImageToImage(cmdBuffer, offscreenTexture[1], offscreenTexture[0]);
 		}
+		//调试输出
+		{
+			if (showGBuffer >= 0)
+			{
+				vkUtils::copyImageToImage(cmdBuffer, gBuffer.texture[showGBuffer], offscreenTexture[0]);
+			}
+		}
 		//色调映射
 		{
 			vkUtils::transitionImageLayout(cmdBuffer, offscreenTexture[0], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 			vkUtils::transitionImageLayout(cmdBuffer, swapChain.swapChainImages[currentImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 			postProcessManager->toneMappingProcess->excute(cmdBuffer, offscreenTexture[0].descriptor, swapChain.swapChainImages[currentImageIndex].view);
 		}
+
 	}
 
 	// UI
@@ -515,6 +641,8 @@ void VulkanEngine::buildCommandBuffer()
 		VkRenderingAttachmentInfo colorAttachment = vks::initializers::RenderingAttachmentInfo_Color(swapChain.swapChainImages[currentImageIndex].view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 		VkRenderingInfo renderInfo = vks::initializers::RenderingInfo({ width, height }, &colorAttachment, nullptr);
 		vkCmdBeginRendering(cmdBuffer, &renderInfo);
+		const VkViewport viewport = vks::initializers::viewport((float)width, (float)height, 0.0f, 1.0f);
+		const VkRect2D scissor = vks::initializers::rect2D(width, height, 0, 0);
 		vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
 		vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 		drawUI(cmdBuffer);
@@ -594,6 +722,10 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 			ImGui::InputFloat("曝光", &globalParam.exposure, 0.01f, 0.1f, "%.2f");
 			ImGui::InputFloat("Gamma", &globalParam.gamma, 0.01f, 0.1f, "%.2f");
 			ImGui::Checkbox("Skybox", &displaySkybox);
+			if (showGBuffer == -1)
+				ImGui::SliderInt("显示GBuffer", &showGBuffer, -1, GBufferCount - 1);
+			else
+				ImGui::SliderInt(GBufferNames[showGBuffer], &showGBuffer, -1, GBufferCount - 1);
 		}
 		ImGui::Unindent();
 	}

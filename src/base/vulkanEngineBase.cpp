@@ -219,8 +219,8 @@ void VulkanEngineBase::prepare()
 	createSwapChain();
 	createCommandBuffers();
 	createSynchronizationPrimitives();
+	setupGBuffer();
 	setupOffscreenAttachment();
-	setupMotionVector();
 	setupDepthStencil();
 	setupRenderPass();
 	createPipelineCache();
@@ -910,8 +910,7 @@ VulkanEngineBase::~VulkanEngineBase()
 	{
 		vkDestroyShaderModule(device, shaderModule, nullptr);
 	}
-
-	motionVector.destroy();
+	gBuffer.destroy();
 	depthStencil.destroy();
 
 	vkDestroyPipelineCache(device, pipelineCache, nullptr);
@@ -2976,6 +2975,34 @@ void VulkanEngineBase::createCommandPool()
 	VK_CHECK_RESULT(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &cmdPool));
 }
 
+void VulkanEngineBase::setupGBuffer()
+{
+	VkCommandBuffer layoutCmd = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+	for (int i = 0; i < GBufferCount; ++i)
+	{
+		gBuffer.texture[i].device = vulkanDevice;
+		gBuffer.texture[i].format = GBufferFormats[i];
+		gBuffer.texture[i].width = width;
+		gBuffer.texture[i].height = height;
+		gBuffer.texture[i].mipLevels = 1;
+		gBuffer.texture[i].layerCount = 1;
+
+		vulkanDevice->createColorImage(gBuffer.texture[i]);
+		vks::tools::setImageLayout(
+			layoutCmd,
+			gBuffer.texture[i].image,
+			VK_IMAGE_ASPECT_COLOR_BIT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	}
+	vulkanDevice->flushCommandBuffer(layoutCmd, queue, true);
+	for (int i = 0; i < GBufferCount; ++i)
+	{
+		gBuffer.texture[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		gBuffer.texture[i].updateDescriptor();
+	}
+}
+
 void VulkanEngineBase::setupOffscreenAttachment()
 {
 	for (auto& offscreenTex : offscreenTexture) {
@@ -2987,17 +3014,6 @@ void VulkanEngineBase::setupOffscreenAttachment()
 		offscreenTex.layerCount = 1;
 		vulkanDevice->createColorImage(offscreenTex);
 	}
-}
-
-void VulkanEngineBase::setupMotionVector()
-{
-	motionVector.device = vulkanDevice;
-	motionVector.format = motionVectorFormat;
-	motionVector.width = width;
-	motionVector.height = height;
-	motionVector.mipLevels = 1;
-	motionVector.layerCount = 1;
-	vulkanDevice->createColorImage(motionVector);
 }
 
 void VulkanEngineBase::setupDepthStencil()
@@ -3090,11 +3106,13 @@ void VulkanEngineBase::setupFrameBuffer()
 		mainRenderPass.frameBuffers.resize(1);
 		mainRenderPass.width = width;
 		mainRenderPass.height = height;
-		const VkImageView attachments[3] = { offscreenTexture[0].view,	depthStencil.view , motionVector.view};
+		const int attachmentCount = 2;
+		const VkImageView attachments[attachmentCount] = { offscreenTexture[0].view,	depthStencil.view};
+		//const VkImageView attachments[3] = { offscreenTexture[0].view,	depthStencil.view , gBuffer.texture[GBufferMotionVector].view};
 		VkFramebufferCreateInfo frameBufferCreateInfo{};
 		frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		frameBufferCreateInfo.renderPass = mainRenderPass.renderPass;
-		frameBufferCreateInfo.attachmentCount = 3;
+		frameBufferCreateInfo.attachmentCount = attachmentCount;
 		frameBufferCreateInfo.pAttachments = attachments;
 		frameBufferCreateInfo.width = width;
 		frameBufferCreateInfo.height = height;
@@ -3105,7 +3123,8 @@ void VulkanEngineBase::setupFrameBuffer()
 
 void VulkanEngineBase::setupRenderPass()
 {
-	std::array<VkAttachmentDescription, 3> attachments = {};
+	const int attachmentCount = 2;
+	std::array<VkAttachmentDescription, attachmentCount> attachments = {};
 	// Color attachment
 	attachments[0].format = offscreenFormat;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -3118,28 +3137,28 @@ void VulkanEngineBase::setupRenderPass()
 	// Depth attachment
 	attachments[1].format = depthFormat;
 	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD; // 加载延迟渲染几何阶段的深度结果
 	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 	attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 	// Motion vector attachment
-	attachments[2].format = motionVectorFormat;
-	attachments[2].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // 初始清除为(0,0,0)
-	attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE; // 保存结果供后续使用
-	attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[2].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[2].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // 后处理阶段可读
+	//attachments[2].format = GBufferFormats[GBufferMotionVector];
+	//attachments[2].samples = VK_SAMPLE_COUNT_1_BIT;
+	//attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+	//attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	//attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	//attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	//attachments[2].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	//attachments[2].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // 后处理阶段可读
 
 
-	std::array<VkAttachmentReference, 2> colorReferences = {};
+	std::array<VkAttachmentReference, attachmentCount - 1> colorReferences = {};
 	colorReferences[0].attachment = 0; // 颜色附件（索引0）
 	colorReferences[0].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	colorReferences[1].attachment = 2; // 运动向量附件（索引2）
-	colorReferences[1].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	//colorReferences[1].attachment = 2; // 运动向量附件（索引2）
+	//colorReferences[1].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 
 	VkAttachmentReference depthReference = {};
@@ -3210,13 +3229,13 @@ void VulkanEngineBase::windowResize()
 	createSwapChain();
 
 	// Recreate the frame buffers
-	motionVector.destroy();
+	gBuffer.destroy();
 	depthStencil.destroy();
 	for (auto& offscreenTex : offscreenTexture) {
 		offscreenTex.destroy();
 	}
+	setupGBuffer();
 	setupOffscreenAttachment();
-	setupMotionVector();
 	setupDepthStencil();
 	for (auto& frameBuffer : mainRenderPass.frameBuffers) {
 		vkDestroyFramebuffer(device, frameBuffer, nullptr);

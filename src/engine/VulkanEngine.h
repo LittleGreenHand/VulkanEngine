@@ -21,9 +21,10 @@
 //Pipeline索引
 enum PipelinesIndex {
 	PL_Skybox = 0,
-	PL_PBR_OPAQUE,//不透明物体
-	PL_PBR_MASK,//遮罩物体
-	PL_PBR_BLEND,//半透明物体
+	PL_PBR_BLEND,						//半透明物体前向渲染
+	PL_PBR_DEFER_GEOMETRY_Opaque,		//不透明物体的延迟渲染几何阶段
+	PL_PBR_DEFER_GEOMETRY_AlphaMasked,	//遮罩物体的延迟渲染几何阶段
+	PL_PBR_DEFER_LIGHTING,				//延迟渲染光照阶段
 	PL_Count
 };
 //前向声明
@@ -33,6 +34,7 @@ class VulkanEngine : public VulkanEngineBase
 {
 public:
 	bool displaySkybox = true;
+	int showGBuffer = -1;
 	vkLight::VulkanPointLights pointLights;
 	vkLight::VulkanDirectLights directLight;
 	PostProcessManager* postProcessManager = nullptr;

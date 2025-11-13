@@ -79,6 +79,23 @@ namespace vks
 			return renderInfo;
 		}
 
+		inline VkRenderingInfo RenderingInfo(VkExtent2D renderExtent, int colorAttachmentCount, VkRenderingAttachmentInfo* colorAttachment,
+			VkRenderingAttachmentInfo* depthAttachment)
+		{
+			VkRenderingInfo renderInfo{};
+			renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+			renderInfo.pNext = nullptr;
+
+			renderInfo.renderArea = VkRect2D{ VkOffset2D { 0, 0 }, renderExtent };
+			renderInfo.layerCount = 1;
+			renderInfo.colorAttachmentCount = colorAttachmentCount;
+			renderInfo.pColorAttachments = colorAttachment;
+			renderInfo.pDepthAttachment = depthAttachment;
+			renderInfo.pStencilAttachment = depthAttachment;
+
+			return renderInfo;
+		}
+
 		inline VkMemoryAllocateInfo memoryAllocateInfo()
 		{
 			VkMemoryAllocateInfo memAllocInfo {};
@@ -520,6 +537,15 @@ namespace vks
 			VkPipelineColorBlendAttachmentState pipelineColorBlendAttachmentState {};
 			pipelineColorBlendAttachmentState.colorWriteMask = colorWriteMask;
 			pipelineColorBlendAttachmentState.blendEnable = blendEnable;
+			if(blendEnable)
+			{
+				pipelineColorBlendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+				pipelineColorBlendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+				pipelineColorBlendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
+				pipelineColorBlendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+				pipelineColorBlendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+				pipelineColorBlendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
+			}
 			return pipelineColorBlendAttachmentState;
 		}
 

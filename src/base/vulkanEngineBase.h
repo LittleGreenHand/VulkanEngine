@@ -218,8 +218,7 @@ public:
 	VkFormat offscreenFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 	/** @brief Default depth stencil attachment used by the default render pass */
 	vks::Texture depthStencil{};
-	VkFormat motionVectorFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-	vks::Texture motionVector{};
+	GBuffer gBuffer;
 
 	// OS specific
 #if defined(_WIN32)
@@ -352,10 +351,10 @@ public:
 	virtual void mouseMoved(double x, double y, bool &handled);
 	/** @brief (Virtual) Called when the window has been resized, can be used by the sample application to recreate resources */
 	virtual void windowResized();
+	/** @brief (Virtual) 创建延迟渲染所需的GBuffer */
+	virtual void setupGBuffer();
 	/** @brief (Virtual) 创建离屏渲染目标 */
 	virtual void setupOffscreenAttachment();
-	/** @brief (Virtual) 创建运动向量纹理 */
-	virtual void setupMotionVector();
 	/** @brief (Virtual) Setup default depth and stencil views */
 	virtual void setupDepthStencil();
 	/** @brief (Virtual) Setup default framebuffers for all requested swapchain images */

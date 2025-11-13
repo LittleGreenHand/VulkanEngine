@@ -1336,19 +1336,19 @@ Dimensions vkUtils::GetSceneDimensions()
 	return dimension;
 }
 
-void vkUtils::transitionImageLayout(VkCommandBuffer cmd, vks::Texture& texture, VkImageLayout newLayout, VkImageAspectFlags aspectMask)
+void vkUtils::transitionImageLayout(VkCommandBuffer cmd, vks::Texture& texture, VkImageLayout newLayout, VkImageAspectFlags aspectMask, VkPipelineStageFlags2 srcStageMask, VkAccessFlags2 srcAccessMask, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask)
 {
-	if(texture.layerCount == newLayout)
+	if(texture.imageLayout == newLayout)
 		return;
 	//VkImageMemoryBarrier2 是Vulkan1.3引入的扩展（VK_KHR_synchronization2）中定义的同步原语，用于更精细地控制图像内存访问顺序和布局转换
 	VkImageMemoryBarrier2 imageBarrier{ .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
 	imageBarrier.pNext = nullptr;
 
 	//VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT 是一个特殊的管线阶段标志，用于表示所有可能的管线阶段
-	imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;//指定哪些管线阶段必须在屏障前完成
-	imageBarrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;//确保内存写入在屏障前完成
-	imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;//指定屏障后允许继续执行的管线阶段
-	imageBarrier.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;//指定屏障后允许对资源进行的具体访问操作（如读、写），确保数据一致性
+	imageBarrier.srcStageMask = srcStageMask;//指定哪些管线阶段必须在屏障前完成
+	imageBarrier.srcAccessMask = srcAccessMask;//确保内存写入在屏障前完成
+	imageBarrier.dstStageMask = dstStageMask;//指定屏障后允许继续执行的管线阶段
+	imageBarrier.dstAccessMask = dstAccessMask;//指定屏障后允许对资源进行的具体访问操作（如读、写），确保数据一致性
 
 	imageBarrier.oldLayout = texture.imageLayout;
 	imageBarrier.newLayout = newLayout;

@@ -5,26 +5,18 @@ import "Binding_Material.slang";
 import "Binding_Mesh.slang";
 import "MotionVector.slang";
 import "BRDF.slang";
+import types;
 
-struct VSOutput
-{
-    float4 Pos : SV_POSITION; // 顶点的裁剪空间位置，带有SV_POSITION语义，因此在片段着色器中不会被插值
-    float3 WorldPos;
-    float3 ViewPos;
-    float3 Normal;
-    float2 UV;
-    float3 Tangent;
-    float3 Color;
-    float4 currentClipPos;
-    float4 prevClipPos;
-};
 struct FSOutput
 {
     float4 color : SV_TARGET0;
-    float4 motionVector : SV_TARGET1;
+    // float4 motionVector : SV_TARGET1;
 };
 // 0：不透明  1：遮罩  2：半透明
-[SpecializationConstant] const int ALPHAMODE = 0;
+[[SpecializationConstant]] const int ALPHAMODE = 0;
+// 0: 前向渲染；1: 延迟渲染（光照阶段）
+[[SpecializationConstant]] const int RENDER_MODE = 0;
+
 #define PI 3.1415926535897932384626433832795
 
 // 预过滤环境反射采样
@@ -174,74 +166,12 @@ bool isZeroVector(float3 v) {
     return lenSq < 1e-9;
 }
 
-struct NormalInfo
-{
-    float3 T; // 切线
-    float3 B; // 副切线
-    float3 N; // 法线
-    float3x3 TBN; // TBN矩阵
-};
-// 计算世界空间中的法向量（考虑法线贴图）
-// 从法线纹理中采样并通过TBN矩阵转换到世界空间
-NormalInfo calculateNormal(VSOutput input)
-{
-    // 世界空间法向量
-	float3 N = normalize(input.Normal);
-    // 世界空间切线向量
-    float3 T;
-    if (materialParameters.anisotropicFactor != 0.f && !isZeroVector(materialParameters.tangent.xyz))
-    {
-        T = normalize(materialParameters.tangent.xyz);
-    }
-    else
-    {
-        T = normalize(input.Tangent);
-        if (isZeroVector(input.Tangent))
-        {
-            // 计算世界空间位置和纹理坐标的导数
-            float3 dPdx = ddx(input.WorldPos);
-            float3 dPdy = ddy(input.WorldPos);
-            float2 dUVdx = ddx(input.UV);
-            float2 dUVdy = ddy(input.UV);
-
-            // 求解切线向量
-            T = normalize(dPdx * dUVdy.y - dPdy * dUVdx.y);
-        }
-    }
-
-    // 计算副切线向量
-	float3 B = normalize(cross(N, T));
-    // 构建TBN矩阵（切线-副切线-法线矩阵）
-	float3x3 TBN = transpose(float3x3(T, B, N));
-
-    NormalInfo normalInfo;
-    normalInfo.T = T;
-    normalInfo.B = B;
-    normalInfo.N = N;
-    normalInfo.TBN = TBN;
-
-    if (materialParameters.normalTextureEmpty == 0)
-    {
-        // 从法线纹理采样并转换范围：[0,1] → [-1,1]
-        float3 tangentNormal = normalTexture.Sample(input.UV).xyz * 2.0 - 1.0;
-        normalInfo.N = normalize(mul(TBN, tangentNormal));
-    }
-    return normalInfo;
-}
-
-// 偏置矩阵，用于将坐标从[-1, 1]范围（标准化设备坐标 NDC）转换为[0, 1]范围（纹理采样坐标）
-static const float4x4 biasMat = float4x4(
-    0.5, 0.0, 0.0, 0.5,
-    0.0, 0.5, 0.0, 0.5,
-    0.0, 0.0, 1.0, 0.0,
-    0.0, 0.0, 0.0, 1.0);
-
 [shader("vertex")]
-VSOutput vertexMain(VSInput input)
-{
-    VSOutput output;
+PBR_VSOutput vertexMain(VSInput input)
+{ 
+    // 前向渲染
+    PBR_VSOutput output;
     output.WorldPos = mul(meshInfo.model, float4(input.Pos, 1.0)).xyz;
-    output.ViewPos = mul(globalParams.view, float4(output.WorldPos.xyz, 1.0)).xyz;
     output.Normal = mul((float3x3)meshInfo.model, input.Normal);
     output.Tangent = mul((float3x3)meshInfo.model, input.Tangent.xyz);
     output.UV = input.UV;
@@ -253,71 +183,62 @@ VSOutput vertexMain(VSInput input)
 }
 
 [shader("fragment")]
-FSOutput fragmentMain(VSOutput input)
+FSOutput fragmentMain(PBR_VSOutput input)
 {
-    NormalInfo normalInfo = calculateNormal(input);
-    float3 N = normalInfo.N;
-	float3 V = normalize(globalParams.camPos - input.WorldPos);
-    float3 R = reflect(-V, N);
-    // 初始化默认金属度和粗糙度（1.0为默认值）
+    float3 T;  // 切线
+    float3 B;  // 副切线
+    float3 N;  // 法线
+    float3 V;  // 视线方向
+    float3 R;  // 反射方向
     float metallic = 1.0;
     float roughness = 1.0;
-
-    float2 mr;
-    if (materialParameters.mergeMetallicRoughnessTexture != 0)
-    {
-        if (materialParameters.metallicRoughnessTextureEmpty != 0)
-        {
-            mr = float2(1.0, 1.0);
-        }
-        else
-        {
-            mr = metallicRoughnessTexture.Sample(input.UV).rg;
-        }
-    }
-    else
-    {
-        float metallicVal = 1.0;
-        float roughnessVal = 1.0;
-
-        if (!materialParameters.metallicTextureEmpty != 0)
-        {
-            metallicVal = metallicTexture.Sample(input.UV).r;
-        }
-        if (!materialParameters.roughnessTextureEmpty != 0)
-        {
-            roughnessVal = roughnessTexture.Sample(input.UV).r;
-        }
-
-        mr = float2(metallicVal, roughnessVal);
-    }
-
-    // 应用材质参数中的因子（最终值 = 纹理采样值 * 材质因子）
-    metallic = mr.x * materialParameters.metallicFactor;
-    roughness = mr.y * materialParameters.roughnessFactor;
-    // 确保数值在有效范围内（0.0-1.0），避免异常值影响渲染
-    metallic = clamp(metallic, 0.0, 1.0);
-    roughness = clamp(roughness, 0.0, 1.0);
-
-    float4 albedoColor;
-    if (materialParameters.baseColorTextureEmpty != 0) {
-        albedoColor = float4(input.Color, 1.0);
-    }
-    else {
-        albedoColor = baseColorTexture.Sample(input.UV);
-        albedoColor.rgb = pow(albedoColor.rgb, float3(2.2, 2.2, 2.2));
-    }
-    albedoColor.rgb *= materialParameters.baseColorFactor.rgb;
-    if(ALPHAMODE == 1)
-    {
-        if (albedoColor.a < materialParameters.alphaCutoff)
-        {
-            //遮罩模式，alpha值为0，丢弃当前片段
-            discard;
-        }
-    }
+    float4 albedoColor; // 当前片段的反照率颜色
+    float3 WorldPos;    // 当前片段的世界空间位置
+    float3 ViewPos;     // 当前片段的视图空间位置
     float3 emission = emissiveTexture.Sample(input.UV).rgb;
+    // 获取环境光遮蔽
+    float3 ao;
 
+    if (RENDER_MODE == 0)
+    {
+        // 前向渲染
+        WorldPos = input.WorldPos;
+        ViewPos = mul(globalParams.view, float4(WorldPos, 1.0)).xyz;
+        NormalInfo normalInfo = calculateNormal(input.Normal, input.Tangent, input.WorldPos, input.UV);
+        T = normalInfo.T;
+        B = normalInfo.B;
+        N = normalInfo.N;
+        V = normalize(globalParams.camPos - WorldPos);
+        R = reflect(-V, N);
+        GetMetallicRoughness(input.UV, metallic, roughness);
+
+        if (materialParameters.baseColorTextureEmpty != 0) {
+            albedoColor = float4(input.Color, 1.0);
+        }
+        else {
+            albedoColor = baseColorTexture.Sample(input.UV);
+            albedoColor.rgb = pow(albedoColor.rgb, float3(2.2, 2.2, 2.2));
+        }
+        albedoColor.rgb *= materialParameters.baseColorFactor.rgb;
+        ao = materialParameters.AOTextureEmpty != 0 ? float3(1.0, 1.0, 1.0) : AOTexture.Sample(input.UV).rrr;
+    }
+    else if (RENDER_MODE == 1)
+    {
+        // 延迟渲染
+        WorldPos = G_Position.Sample(input.UV).xyz;
+        ViewPos = mul(globalParams.view, float4(WorldPos, 1.0)).xyz;
+        T = normalize(G_Tangent.Sample(input.UV).xyz);
+        N = normalize(G_Normal.Sample(input.UV).xyz * 2.0 - 1.0);
+        B = normalize(cross(N, T));
+        V = normalize(globalParams.camPos - WorldPos);
+        R = reflect(-V, N);
+        albedoColor = G_AlbedoAlpha.Sample(input.UV);
+        float4 materialSample = G_Material.Sample(input.UV);
+        metallic = materialSample.r;
+        roughness = materialSample.g;
+        ao = materialSample.bbb;
+    }
+    
     // 计算基础反射率F0
     // 非金属材质使用0.04的默认值，金属材质使用反照率颜色
     float3 F0 = float3(0.04, 0.04, 0.04);
@@ -329,7 +250,7 @@ FSOutput fragmentMain(VSOutput input)
         if (lightParameter.pointLights[i].isRnder == 1)
         {
             // 计算表面点到光源的向量和距离
-            float3 lightDir = lightParameter.pointLights[i].position.xyz - input.WorldPos;
+            float3 lightDir = lightParameter.pointLights[i].position.xyz - WorldPos;
             float distance = length(lightDir);
             float3 L = normalize(lightDir);
 
@@ -345,7 +266,7 @@ FSOutput fragmentMain(VSOutput input)
             if(materialParameters.anisotropicFactor != 0.0)
             {
                 Lo += shadowFactor * anisSpecularContribution(albedoColor.rgb, lightParameter.pointLights[i].color.xyz, L, V, N, F0, metallic, roughness, attenuation,
-                                                        normalInfo.T, normalInfo.B, materialParameters.anisotropicFactor);
+                                                        T, B, materialParameters.anisotropicFactor);
             }
             else
             {
@@ -359,13 +280,18 @@ FSOutput fragmentMain(VSOutput input)
     {
         // 获取级联阴影贴图级别
         for (uint i = 0; i < lightParameter.directLight.cascadeCount - 1; ++i) {
-            if (input.ViewPos.z < lightParameter.directLight.cascadeSplits[i]) {
+            if (ViewPos.z < lightParameter.directLight.cascadeSplits[i]) {
                 cascadeIndex = i + 1;
             }
         }
-
+        // 偏置矩阵，用于将坐标从[-1, 1]范围（标准化设备坐标 NDC）转换为[0, 1]范围（纹理采样坐标）
+        static const float4x4 biasMat = float4x4(
+            0.5, 0.0, 0.0, 0.5,
+            0.0, 0.5, 0.0, 0.5,
+            0.0, 0.0, 1.0, 0.0,
+            0.0, 0.0, 0.0, 1.0);
         //将世界位置转换到定向光坐标空间，并通过biasMat转换到NDC空间得到阴影采样坐标
-        float4 shadowCoord = mul(biasMat, mul(lightParameter.directLight.ViewProj[cascadeIndex], float4(input.WorldPos, 1.0)));
+        float4 shadowCoord = mul(biasMat, mul(lightParameter.directLight.ViewProj[cascadeIndex], float4(WorldPos, 1.0)));
         float shadow = 0;
         if (lightParameter.directLight.usePCF == 1) {
             shadow = filterPCF(shadowCoord / shadowCoord.w, cascadeIndex);
@@ -378,7 +304,7 @@ FSOutput fragmentMain(VSOutput input)
         if (materialParameters.anisotropicFactor != 0.0)
         {
             Lo += shadow * anisSpecularContribution(albedoColor.rgb, lightParameter.directLight.color.xyz, L, V, N, F0, metallic, roughness, 1.0,
-                                                normalInfo.T, normalInfo.B, materialParameters.anisotropicFactor);            
+                                                T, B, materialParameters.anisotropicFactor);            
         }
         else
         {
@@ -406,9 +332,6 @@ FSOutput fragmentMain(VSOutput input)
     // 计算环境镜面反射贡献
     float3 specular = reflection * (F * brdf.x + brdf.y);
 
-    //获取环境光遮蔽
-    float3 ao = materialParameters.AOTextureEmpty != 0 ? float3(1.0, 1.0, 1.0) : AOTexture.Sample(input.UV).rrr;
-
     // 计算环境光贡献
     // kD：漫反射系数，金属度越高漫反射越小
     float3 kD = 1.0 - F;
@@ -417,6 +340,7 @@ FSOutput fragmentMain(VSOutput input)
 
     float3 color = ambient + Lo + emission;
     
+    //用于调试显示级联阴影
     if (lightParameter.directLight.colorCascades == 1) {
         color *= getCascadeColor(cascadeIndex);
     }
@@ -424,7 +348,9 @@ FSOutput fragmentMain(VSOutput input)
     FSOutput output;
     output.color = float4(color, albedoColor.a);
     //output.color = float4(normalInfo.T, albedoColor.a);
-    output.motionVector = Calculate3DVelocity(input.currentClipPos, input.prevClipPos, globalParams.jitter);
+
+    //if(RENDER_MODE == 1)
+    //    output.motionVector = Calculate3DVelocity(input.currentClipPos, input.prevClipPos, globalParams.jitter);
 
     return output;
 }
