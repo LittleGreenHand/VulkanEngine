@@ -192,6 +192,7 @@ FSOutput fragmentMain(PBR_VSOutput input)
     float3 R;  // 反射方向
     float metallic = 1.0;
     float roughness = 1.0;
+    float anisotropicFactor = 0.0;
     float4 albedoColor; // 当前片段的反照率颜色
     float3 WorldPos;    // 当前片段的世界空间位置
     float3 ViewPos;     // 当前片段的视图空间位置
@@ -211,6 +212,7 @@ FSOutput fragmentMain(PBR_VSOutput input)
         V = normalize(globalParams.camPos - WorldPos);
         R = reflect(-V, N);
         GetMetallicRoughness(input.UV, metallic, roughness);
+        anisotropicFactor = materialParameters.anisotropicFactor;
 
         if (materialParameters.baseColorTextureEmpty != 0) {
             albedoColor = float4(input.Color, 1.0);
@@ -237,6 +239,7 @@ FSOutput fragmentMain(PBR_VSOutput input)
         metallic = materialSample.r;
         roughness = materialSample.g;
         ao = materialSample.bbb;
+        anisotropicFactor = materialSample.a;
     }
     
     // 计算基础反射率F0
@@ -263,10 +266,10 @@ FSOutput fragmentMain(PBR_VSOutput input)
             float attenuation = calculateAttenuation(distance, lightParameter.pointLights[i].range, lightParameter.pointLights[i].attenuationMode);
 
             // 累加每个光源的贡献（已包含衰减）
-            if(materialParameters.anisotropicFactor != 0.0)
+            if(anisotropicFactor != 0.0)
             {
                 Lo += shadowFactor * anisSpecularContribution(albedoColor.rgb, lightParameter.pointLights[i].color.xyz, L, V, N, F0, metallic, roughness, attenuation,
-                                                        T, B, materialParameters.anisotropicFactor);
+                                                        T, B, anisotropicFactor);
             }
             else
             {
@@ -301,10 +304,10 @@ FSOutput fragmentMain(PBR_VSOutput input)
 
         float3 lightDir = lightParameter.directLight.direct.xyz;
         float3 L = normalize(lightDir);
-        if (materialParameters.anisotropicFactor != 0.0)
+        if (anisotropicFactor != 0.0)
         {
             Lo += shadow * anisSpecularContribution(albedoColor.rgb, lightParameter.directLight.color.xyz, L, V, N, F0, metallic, roughness, 1.0,
-                                                T, B, materialParameters.anisotropicFactor);            
+                                                T, B, anisotropicFactor);            
         }
         else
         {
@@ -347,7 +350,10 @@ FSOutput fragmentMain(PBR_VSOutput input)
     
     FSOutput output;
     output.color = float4(color, albedoColor.a);
-    //output.color = float4(normalInfo.T, albedoColor.a);
+    if(ALPHAMODE == 2)
+    {
+        output.color.a = output.color.a * materialParameters.alphaFactor;
+    }
 
     //if(RENDER_MODE == 1)
     //    output.motionVector = Calculate3DVelocity(input.currentClipPos, input.prevClipPos, globalParams.jitter);

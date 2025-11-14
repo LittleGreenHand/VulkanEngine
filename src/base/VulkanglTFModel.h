@@ -123,11 +123,12 @@ namespace vkglTF
 		struct alignas(16) MaterialParameters
 		{
 			glm::vec4 baseColorFactor = glm::vec4(1.0f);
+			glm::vec4 tangent = glm::vec4(0.0f);//如果是零向量，则表示使用物体本身的切线，否则使用该切线
 			float alphaCutoff = 1.0f;
-			float metallicFactor = 1.0f;
+			float alphaFactor = 1.0f;//透明度，1表示不透明，0表示完全透明
+			float metallicFactor = 1.0f;	
 			float roughnessFactor = 1.0f;
 			float anisotropicFactor = 0.0f;//各向异性强度，0表示不使用各向异性，值为[-1, 1]
-			glm::vec4 tangent = glm::vec4(0.0f);//如果是零向量，则表示使用物体本身的切线，否则使用该切线
 			float baseColorTextureEmpty = true;
 			float normalTextureEmpty = true;
 			float mergeMetallicRoughnessTexture = true;

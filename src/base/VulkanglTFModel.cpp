@@ -1604,7 +1604,7 @@ void vkglTF::Model::drawNode(Node *node, VkCommandBuffer commandBuffer, uint32_t
 				skip = (material.alphaMode != Material::ALPHAMODE_MASK);
 			}
 			if (renderFlags & RenderFlags::RenderAlphaBlendedNodes) {
-				skip = (material.alphaMode != Material::ALPHAMODE_BLEND);
+				skip = (material.alphaMode != Material::ALPHAMODE_BLEND) && material.materialParameters.alphaFactor > 0;
 			}
 			if (!skip) {
 				if (renderFlags & RenderFlags::BindMaterial) {

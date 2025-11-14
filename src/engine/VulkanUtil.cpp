@@ -1271,14 +1271,15 @@ void vkUtils::DrawNodePropertiesPanel()
 			ImGui::Text("Primitive %d Material", (int)i);
 			ImGui::Separator();
 
-			ImGui::ColorEdit4("Base Color Factor", &material.materialParameters.baseColorFactor.x);
-			ImGui::SliderFloat("Metallic Factor", &material.materialParameters.metallicFactor, 0.0f, 1.0f);
-			ImGui::SliderFloat("Roughness Factor", &material.materialParameters.roughnessFactor, 0.0f, 1.0f);
-			ImGui::SliderFloat("Alpha Cutoff", &material.materialParameters.alphaCutoff, 0.0f, 1.0f);
+			ImGui::ColorEdit4("基础颜色", &material.materialParameters.baseColorFactor.x);
+			ImGui::SliderFloat("金属度", &material.materialParameters.metallicFactor, 0.0f, 1.0f);
+			ImGui::SliderFloat("粗糙度", &material.materialParameters.roughnessFactor, 0.0f, 1.0f);
+			ImGui::SliderFloat("Alpha裁切系数", &material.materialParameters.alphaCutoff, 0.0f, 1.0f);
+			ImGui::SliderFloat("透明度", &material.materialParameters.alphaFactor, 0.0f, 1.0f);
 			ImGui::SliderFloat("Anisotropic Factor", &material.materialParameters.anisotropicFactor, -1.0f, 1.0f);
 			ImGui::InputFloat4("tangent", &material.materialParameters.tangent.x);
 
-			const char* alphaModes[] = { "Opaque", "Mask", "Blend" };
+			const char* alphaModes[] = { "不透明", "遮罩", "透明" };
 			ImGui::Combo("Alpha Mode", (int*)&material.alphaMode, alphaModes, IM_ARRAYSIZE(alphaModes));
 			// 定义纹理参数与对应显示文本的映射关系
 			std::vector<std::pair<bool, const char*>> textureInfo = {

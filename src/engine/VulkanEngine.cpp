@@ -165,6 +165,7 @@ void VulkanEngine::loadAssets()
 		models[M_Sphere].materials[0].materialParameters.baseColorFactor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 		models[M_Sphere].materials[0].materialParameters.metallicFactor = 0.0f;
 		models[M_Sphere].materials[0].materialParameters.roughnessFactor = 0.5f;
+		models[M_Sphere].materials[0].alphaMode = vkglTF::Material::ALPHAMODE_BLEND;
 		models[M_Sphere].nodes[0]->update();
 
 		models[M_Sponza].loadFromFile(getAssetPath() + "models/sponza/sponza.gltf", vulkanDevice, queue, glTFLoadingFlags);
@@ -373,13 +374,8 @@ void VulkanEngine::preparePipelines()
 			PipelineBuilder builder(device);
 			builder.depthStencilState.depthWriteEnable = VK_FALSE;//禁用深度写入
 			builder.depthStencilState.depthTestEnable = VK_TRUE;//启用深度测试
-			builder.setRasterizationState(VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
 			builder.addShaderStage(loadShader(getShadersPath() + "PBR_fullScreen.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
 			builder.addShaderStage(loadShader(getShadersPath() + "PBR_Render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
-			VkPipelineColorBlendAttachmentState colorBlendAttachments[1] = {
-				vks::initializers::pipelineColorBlendAttachmentState(0xf, VK_FALSE)
-			};
-			builder.colorBlendState = vks::initializers::pipelineColorBlendStateCreateInfo(1, colorBlendAttachments);
 
 			//通过特化常量设置透明度模式和渲染模式
 			struct SpecializationData {
@@ -411,7 +407,9 @@ void VulkanEngine::preparePipelines()
 			builder.shaderStages[1].pSpecializationInfo = &specializationInfo;
 			specializationData.RENDER_MODE = 0;//前向渲染模式
 			specializationData.ALPHAMODE = 2;//透明模式
-			builder.enableBlendingAlphaBlend();
+			builder.setColorBlendAttachmentState(0xf, VK_TRUE);
+			builder.enableBlendingAdditive();
+			//builder.enableBlendingAlphaBlend();
 			builder.buildPipeline(mainRenderPass.renderPass, pipelineCache, pipelines[PL_PBR_BLEND].layout, pipelines[PL_PBR_BLEND].pipeline);
 			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipelines[PL_PBR_BLEND].pipeline, "PBR_BLEND pipeline");
 		}

@@ -60,10 +60,10 @@ public:
         vkglTF::VertexComponent::Color,
         vkglTF::VertexComponent::Tangent }));
 
-    //配置加法混合模式
+    //配置加法混合模式，让物体有半透明效果
     void enableBlendingAdditive();
 
-    //配置标准透明混合模式
+	//配置标准透明混合模式，当alpha为1时完全不透明，alpha为0时完全透明
     void enableBlendingAlphaBlend();
 
     // 添加着色器阶段

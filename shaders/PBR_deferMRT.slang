@@ -77,7 +77,7 @@ GBuffer fragmentMain(VSOutput input) {
     if (materialParameters.AOTextureEmpty == 0) {
         ao = AOTexture.Sample(input.UV).r;
     }
-    gbuf.Material = float4(metallic, roughness, ao, 1.0);
+    gbuf.Material = float4(metallic, roughness, ao, materialParameters.anisotropicFactor);
 
     // 4. 写入世界空间位置
     gbuf.WorldPos = float4(input.WorldPos, 1.0);
