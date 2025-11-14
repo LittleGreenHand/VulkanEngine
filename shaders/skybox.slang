@@ -18,6 +18,7 @@ VSOutput vertexMain(VSInput input)
     output.UVW = input.Pos;
     // output.UVW.y = -output.UVW.y;
     output.Pos = mul(globalParams.projection, mul(model, float4(input.Pos.xyz, 1.0)));
+    output.Pos.z = output.Pos.w; // 将天空盒放置在远平面
     return output;
 }
 

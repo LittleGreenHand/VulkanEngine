@@ -309,6 +309,8 @@ void VulkanEngine::preparePipelines()
 
 		// Skybox pipeline
 		builder.rasterizationState.cullMode = VK_CULL_MODE_FRONT_BIT;
+		builder.depthStencilState.depthWriteEnable = VK_FALSE;
+		builder.depthStencilState.depthTestEnable = VK_TRUE;
 		builder.addShaderStage(loadShader(getShadersPath() + "skybox.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
 		builder.addShaderStage(loadShader(getShadersPath() + "skybox.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
 		builder.buildPipeline(mainRenderPass.renderPass, pipelineCache, pipelines[PL_Skybox].layout, pipelines[PL_Skybox].pipeline);
@@ -370,7 +372,7 @@ void VulkanEngine::preparePipelines()
 		{
 			PipelineBuilder builder(device);
 			builder.depthStencilState.depthWriteEnable = VK_FALSE;//禁用深度写入
-			builder.depthStencilState.depthTestEnable = VK_FALSE;//启用深度测试
+			builder.depthStencilState.depthTestEnable = VK_TRUE;//启用深度测试
 			builder.setRasterizationState(VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
 			builder.addShaderStage(loadShader(getShadersPath() + "PBR_fullScreen.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
 			builder.addShaderStage(loadShader(getShadersPath() + "PBR_Render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
@@ -563,44 +565,37 @@ void VulkanEngine::buildCommandBuffer()
 		vkUtils::transitionImageLayout(cmdBuffer, depthStencil, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
 		vkCmdBeginRenderPass(cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+
+		//不透明与遮罩物体的延迟渲染光照阶段
+		{
+			vkUtils::cmdBeginLabel(cmdBuffer, "PBR_DEFER_LIGHTING", { 1.0f, 1.0f, 1.0f });
+			vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_DEFER_LIGHTING].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
+			vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_DEFER_LIGHTING].pipeline);
+			vkCmdDraw(cmdBuffer, 3, 1, 0, 0);//绘制全屏三角形
+			vkUtils::cmdEndLabel(cmdBuffer);
+		}
+
+		//透明物体的前向渲染
+		{
+			vkUtils::cmdBeginLabel(cmdBuffer, "PBR_AlphaBLEND", { 1.0f, 1.0f, 1.0f });
+			vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_BLEND].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
+			vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_BLEND].pipeline);
+			for (auto& [key, model] : models)
+			{
+				model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial | vkglTF::RenderFlags::RenderAlphaBlendedNodes, pipelines[PL_PBR_BLEND].layout);
+			}
+			vkUtils::cmdEndLabel(cmdBuffer);
+		}
+
 		// Skybox
-		if (displaySkybox)
+		if (displaySkybox && !camera.useOrthographic)
 		{
 			vkUtils::cmdBeginLabel(cmdBuffer, "Skybox", { 1.0f, 1.0f, 1.0f });
 			vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_Skybox].pipeline);
 			vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_Skybox].layout, 0, 2, descriptorSetsArray.data(), 0, nullptr);
-			skybox.draw(cmdBuffer);//不需要绑定材质描述符集
+			skybox.draw(cmdBuffer);//不需要绑定材质描述符
 			vkUtils::cmdEndLabel(cmdBuffer);
 		}
-
-		//PBR
-		{
-			//不透明与遮罩物体的延迟渲染光照阶段
-			{
-				vkUtils::cmdBeginLabel(cmdBuffer, "PBR_DEFER_LIGHTING", { 1.0f, 1.0f, 1.0f });
-				vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_DEFER_LIGHTING].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
-				vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_DEFER_LIGHTING].pipeline);
-				vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
-				//for (auto& [key, model] : models)
-				//{
-				//	model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial | vkglTF::RenderFlags::RenderOpaqueNodes, pipelines[PL_PBR_DEFER_GEOMETRY_Opaque].layout);
-				//}
-				vkUtils::cmdEndLabel(cmdBuffer);
-			}
-
-			//透明物体的前向渲染
-			{
-				vkUtils::cmdBeginLabel(cmdBuffer, "PBR_AlphaBLEND", { 1.0f, 1.0f, 1.0f });
-				vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_BLEND].layout, 0, descriptorSetCount, descriptorSetsArray.data(), 0, nullptr);
-				vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[PL_PBR_BLEND].pipeline);
-				for (auto& [key, model] : models)
-				{
-					model.draw(cmdBuffer, vkglTF::RenderFlags::BindMaterial | vkglTF::RenderFlags::RenderAlphaBlendedNodes, pipelines[PL_PBR_BLEND].layout);
-				}
-				vkUtils::cmdEndLabel(cmdBuffer);
-			}
-		}
-
 		vkCmdEndRenderPass(cmdBuffer);
 	}
 	//更新布局
