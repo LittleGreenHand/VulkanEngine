@@ -174,6 +174,8 @@ void VulkanEngine::loadAssets()
 		models[M_Sponza].nodes[0]->translation = (glm::vec3(0, -1, 0));
 		models[M_Sponza].nodes[0]->update();
 
+		//models[M_Terrain].loadFromFile(getAssetPath() + "models/Terrain.gltf", vulkanDevice, queue, glTFLoadingFlags);
+
 		vkUtils::InitModelsSourceDebugName(models);
 
 		skybox.loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, queue, glTFLoadingFlags);
@@ -739,7 +741,9 @@ void VulkanEngine::OnUpdateUIOverlay(vks::UIOverlay* overlay)
 					ImGui::Checkbox("colorCascades", &colorCascades) ||
 					ImGui::InputFloat("深度偏移", &directLight.depthBiasConstant) ||
 					ImGui::InputFloat("深度偏移斜率", &directLight.depthBiasSlope) || 
-					ImGui::ColorEdit3("太阳光颜色", (float*)&vkLight::lightData.directLight.color))
+					ImGui::ColorEdit3("太阳光颜色", (float*)&vkLight::lightData.directLight.color) ||
+					ImGui::InputFloat("太阳光强度", &vkLight::lightData.directLight.color.w)
+					)
 				{
 					vkLight::lightData.directLight.usePCF = PCF;
 					vkLight::lightData.directLight.colorCascades = colorCascades;

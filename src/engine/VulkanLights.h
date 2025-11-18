@@ -20,7 +20,7 @@ namespace vkLight
 	};
 	struct alignas(16) DirectLightInfo {
 		glm::vec4 direct = glm::vec4(0.f, 1.0f, 1.0f, 0.f);
-		glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 0.f);
+		glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 100000.f);
 		glm::mat4 ViewProj[MAX_CASCADES];
 		//每个float元素按16字节对齐（std140要求）
 		struct alignas(16) CascadeSplit {

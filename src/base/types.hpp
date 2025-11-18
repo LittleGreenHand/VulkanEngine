@@ -19,7 +19,8 @@ enum GLTFModels {
 	M_Cerberus,
 	M_Sponza,
 	M_Sphere,
-	M_Axis
+	M_Axis,
+	M_Terrain
 };
 
 struct RenderPassInfo {

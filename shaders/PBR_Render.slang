@@ -4,7 +4,7 @@ import "Binding_Light.slang";
 import "Binding_Material.slang";
 import "Binding_Mesh.slang";
 import "MotionVector.slang";
-import "BRDF.slang";
+import "PBR_BRDF.slang";
 import types;
 
 struct FSOutput
