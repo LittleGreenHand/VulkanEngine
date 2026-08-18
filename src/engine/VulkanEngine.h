@@ -18,7 +18,6 @@
 #include "VulkanglTFModel.h"
 #include "VulkanLights.h"
 
-//Pipeline索引
 enum PipelinesIndex {
 	PL_Skybox = 0,
 	PL_PBR_BLEND,						//半透明物体前向渲染
@@ -27,7 +26,7 @@ enum PipelinesIndex {
 	PL_PBR_DEFER_LIGHTING,				//延迟渲染光照阶段
 	PL_Count
 };
-//前向声明
+
 class PostProcessManager;
 
 class VulkanEngine : public VulkanEngineBase

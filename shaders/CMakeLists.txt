@@ -30,5 +30,4 @@ set(SHADER_FILES
 )
 set_target_properties(Shaders PROPERTIES SOURCES "${SHADER_FILES}")
 source_group("SLANG" FILES ${SLANG_SOURCE_FILES})
-source_group("SCRIPTS" FILES ${SLANG_SOURCE_SCRIPTS})
 

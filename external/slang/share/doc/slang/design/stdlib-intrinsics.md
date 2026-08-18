@@ -19,7 +19,7 @@ The main place these features are used are within the slang core module. This is
 
 Looking at these files will demonstrate the features in use. 
 
-Most of the intrinsics and attributes have names that indicate that they are not for normal use. This is typically via a `__` prefix.
+Most of the intrinsics and attributes have names that indicate that they are not for normal use. This is typically via a `__` prefix. The same convention applies to result registers named inside a `spirv_asm` block: internal registers must be `__`-prefixed (e.g. `%__result`), because the SPIR-V emitter turns every named `spirv_asm` register into an `OpName` in the output, and the prefix keeps those debug names from being mistaken for user symbols. The parser asserts this for core-module code. See the "Internal `spirv_asm` result registers" section of [coding-conventions.md](coding-conventions.md).
 
 The `.meta.slang` files look largely like Slang source files, but their contents can also be generated programmatically with C++ code. A section of code can drop into `C++` code if it is proceeded by `${{{{`. The C++ section is closed with a closing `}}}}`. This mechanism is typically used to generate different versions of a similar code sequence. Values from the C++ code can be accessed via the `$()`, where the contents of the brackets specifies something that can be calculated from within the C++ code.
 
@@ -113,6 +113,7 @@ Sections of the `expansion` string that are to be replaced are prefixed by the `
 * $XC - Ray tracing callable payload
 * $XH - Ray tracing hit object attribute
 * $P - Type-based prefix as used for CUDA and C++ targets (I8 for int8_t, F32 - float etc)
+* $[0-9] - Access extra type or value operands passed explicitly after the format string in `__intrinsic_asm`. For type operands (e.g. generic type parameters like `T`), emits the type name. For value operands (e.g. generic integer parameters like `let N : int`), emits the value expression. The extra operands are listed as a comma-separated sequence after the format string literal. Indices are zero-based.
 
 ## __attributeTarget(astClassName)
 
