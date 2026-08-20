@@ -95,7 +95,7 @@ parser.add_argument('--sample', type=str, help='compile shaders for a single sam
 parser.add_argument('--force', action='store_true', help='force recompile all shaders')
 args = parser.parse_args()
 
-compiler_path = "..\\external\\slang\\bin\\slangc.exe"
+compiler_path = "..\\thirdParty\\slang\\bin\\slangc.exe"
 if args.slangc:
     compiler_path = args.slangc
 print(f"slang编译器路径: {compiler_path}")

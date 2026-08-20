@@ -1,4 +1,6 @@
 #include "VulkanUtil.h"
+#include "VulkanEngine.h"
+
 VulkanEngine* vkUtils::vkEngine = nullptr;
 bool vkUtils::init = false;
 bool vkUtils::debugUtilsSupported = false;
@@ -11,6 +13,11 @@ PFN_vkQueueBeginDebugUtilsLabelEXT vkUtils::vkQueueBeginDebugUtilsLabelEXT{ null
 PFN_vkQueueInsertDebugUtilsLabelEXT vkUtils::vkQueueInsertDebugUtilsLabelEXT{ nullptr };
 PFN_vkQueueEndDebugUtilsLabelEXT vkUtils::vkQueueEndDebugUtilsLabelEXT{ nullptr };
 PFN_vkSetDebugUtilsObjectNameEXT vkUtils::vkSetDebugUtilsObjectNameEXT{ nullptr };
+
+VkDevice vkUtils::GetVkDevice()
+{
+	return vkEngine->vulkanDevice->logicalDevice;
+}
 
 void vkUtils::Init(VulkanEngine* Engine)
 {

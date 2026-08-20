@@ -1,8 +1,8 @@
 #pragma once
 #include <vulkan/vulkan.h>
-#include "vulkanEngine.h"
 #include "VulkanglTFModel.h"
 
+class VulkanEngine;
 class vkUtils
 {
 private:
@@ -17,9 +17,11 @@ private:
 	static PFN_vkQueueInsertDebugUtilsLabelEXT vkQueueInsertDebugUtilsLabelEXT;
 	static PFN_vkQueueEndDebugUtilsLabelEXT vkQueueEndDebugUtilsLabelEXT;
 	static PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
-public:
-	static VulkanEngine* vkEngine;
 
+	static VulkanEngine* vkEngine;
+public:
+	static VulkanEngine* GetEngine() { return vkEngine; }
+	static VkDevice GetVkDevice();
 public:
 	static void Init(VulkanEngine* Engine);
 	static void CleanUp();

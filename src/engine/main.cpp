@@ -4,12 +4,12 @@
 // Most of the code base is shared for the different supported operating systems, but stuff like message handling differs
 
 // Windows entry point
-VulkanEngine* vulkanEngineBase;
+VulkanEngine* vulkanEngine;
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	if (vulkanEngineBase != NULL)
+	if (vulkanEngine != NULL)
 	{
-		vulkanEngineBase->handleMessages(hWnd, uMsg, wParam, lParam);
+		vulkanEngine->handleMessages(hWnd, uMsg, wParam, lParam);
 	}
 	return (DefWindowProc(hWnd, uMsg, wParam, lParam));
 }
@@ -33,11 +33,11 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance
 	VulkanEngine::args.push_back(SHADERS_SPV_DIR);
 #endif
 
-	vulkanEngineBase = new VulkanEngine();
-	vulkanEngineBase->initVulkan();
-	vulkanEngineBase->setupWindow(hInstance, WndProc);
-	vulkanEngineBase->prepare();
-	vulkanEngineBase->renderLoop();
-	delete(vulkanEngineBase);
+	vulkanEngine = new VulkanEngine();
+	vulkanEngine->initVulkan();
+	vulkanEngine->setupWindow(hInstance, WndProc);
+	vulkanEngine->prepare();
+	vulkanEngine->renderLoop();
+	delete(vulkanEngine);
 	return 0;
 }
