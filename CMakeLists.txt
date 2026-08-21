@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10.0 FATAL_ERROR)
-set(NAME VulkanEngine)
+set(PROJECT_NAME VulkanLab CACHE STRING "解决方案与项目名称")
 
-project(${NAME})
+project(${PROJECT_NAME})
 
 include_directories(thirdParty)
 include_directories(thirdParty/glm)
@@ -10,7 +10,6 @@ include_directories(thirdParty/imgui)
 include_directories(thirdParty/tinygltf)
 include_directories(thirdParty/ktx/include)
 include_directories(thirdParty/ktx/other_include)
-include_directories(src/base)
 
 message(STATUS "Using module to find Vulkan:")
 find_package(Vulkan)

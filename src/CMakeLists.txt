@@ -1,23 +1,15 @@
-file(GLOB BASE_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/base/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/base/*.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/base/*.h"
+file(GLOB_RECURSE ALL_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.h"
 )
 
-file(GLOB_RECURSE ENGINE_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/engine/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/engine/*.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/engine/*.h"
+add_executable(${PROJECT_NAME}
+    ${ALL_SOURCES}
 )
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${ALL_SOURCES})
 
-add_executable(VulkanEngine
-    ${ENGINE_SOURCES}
-    ${BASE_SRC}
-)
-source_group("Base" FILES ${BASE_SRC})
-source_group("Engine" FILES ${ENGINE_SOURCES})
-
-target_link_libraries(VulkanEngine
+target_link_libraries(${PROJECT_NAME}
     PRIVATE
     Vulkan::Vulkan
     ${WINLIBS}
@@ -25,16 +17,16 @@ target_link_libraries(VulkanEngine
     ktx
 )
 
-set_target_properties(VulkanEngine
+set_target_properties(${PROJECT_NAME}
     PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
     WIN32_EXECUTABLE ON
 )
 
-target_compile_definitions(VulkanEngine
+target_compile_definitions(${PROJECT_NAME}
     PRIVATE
     ENGINE_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     SHADERS_SPV_DIR="${SHADERS_OUTPUT}"
 )
 
-add_dependencies(VulkanEngine Shaders)
+add_dependencies(${PROJECT_NAME} Shaders)
