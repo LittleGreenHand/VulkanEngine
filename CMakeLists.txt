@@ -33,3 +33,10 @@ add_subdirectory(src)
 add_subdirectory(shaders)
 add_subdirectory(thirdParty/ktx)
 add_subdirectory(thirdParty/imgui)
+
+# 不构建 GLFW 自带的 examples / tests / docs
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
+set(GLFW_INSTALL        OFF CACHE BOOL "" FORCE)
+add_subdirectory(thirdParty/glfw-3.5.1)

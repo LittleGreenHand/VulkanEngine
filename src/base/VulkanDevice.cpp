@@ -12,9 +12,9 @@
 // SRS - Enable beta extensions and make VK_KHR_portability_subset visible
 #define VK_ENABLE_BETA_EXTENSIONS
 #endif
-#include <VulkanDevice.h>
+#include <base/VulkanDevice.h>
 #include <unordered_set>
-#include "VulkanTexture.h"
+#include "base/VulkanTexture.h"
 
 namespace vks
 {	

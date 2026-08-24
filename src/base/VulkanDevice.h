@@ -20,7 +20,7 @@
 namespace vks
 {
 	// 前置声明Texture，代替#include "Texture.h"
-	class Texture;
+class Texture;
 struct VulkanDevice
 {
 	/** @brief Physical device representation */

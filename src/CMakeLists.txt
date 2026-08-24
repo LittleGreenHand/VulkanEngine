@@ -15,7 +15,9 @@ target_link_libraries(${PROJECT_NAME}
     ${WINLIBS}
     imgui
     ktx
+    glfw
 )
+target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 set_target_properties(${PROJECT_NAME}
     PROPERTIES
