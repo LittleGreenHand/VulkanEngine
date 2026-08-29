@@ -18,6 +18,8 @@
 #define TINYGLTF_NO_STB_IMAGE_WRITE
 #include <array>
 #include "VulkanglTFModel.h"
+#include "Render/VulkanContext.h"
+#include "Render/VulkanDebugUtils.h"
 
 VkDescriptorSetLayout vkglTF::MaterialDescriptorSetLayout = VK_NULL_HANDLE;
 VkDescriptorSetLayout vkglTF::MeshDescriptorSetLayout = VK_NULL_HANDLE;
@@ -811,11 +813,24 @@ void vkglTF::Model::createEmptyTexture(VkQueue transferQueue)
 	emptyTexture.descriptor.sampler = emptyTexture.sampler;
 }
 
+vkglTF::Model::Model()
+{
+
+}
+
 /*
 	glTF model loading and rendering class
 */
 vkglTF::Model::~Model()
 {
+	Destroy();
+}
+
+void vkglTF::Model::Destroy()
+{
+	if (!device)
+		return;
+
 	vkDestroyBuffer(device->logicalDevice, vertices.buffer, nullptr);
 	vkFreeMemory(device->logicalDevice, vertices.memory, nullptr);
 	vkDestroyBuffer(device->logicalDevice, indices.buffer, nullptr);
@@ -826,10 +841,13 @@ vkglTF::Model::~Model()
 	for (auto& node : nodes) {
 		delete node;
 	}
-    for (auto& skin : skins) {
-        delete skin;
-    }
+	for (auto& skin : skins) {
+		delete skin;
+	}
+	materials.clear();
+	animations.clear();
 	vkDestroyDescriptorPool(device->logicalDevice, descriptorPool, nullptr);
+	device = nullptr;
 }
 
 void vkglTF::Model::loadNode(vkglTF::Node *parent, const tinygltf::Node &node, uint32_t nodeIndex, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)
@@ -1562,6 +1580,9 @@ void vkglTF::Model::loadFromFile(std::string filename, vks::VulkanDevice *device
 			material.initMaterialTexture(&emptyTexture);
 			material.allocateDescriptorSet(descriptorPool, MaterialDescriptorSetLayout, descriptorBindingFlags);
 			material.updateDescriptorSet();
+			static int count = 0;
+			std::string name = "MaterialParametersBuffer" + std::to_string(count++);
+			VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)material.MaterialParametersBuffer.buffer, name);
 		}
 	}
 }

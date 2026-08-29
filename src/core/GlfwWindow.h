@@ -33,6 +33,7 @@ public:
 	void PollEvents() const;
 	void WaitEvents() const;
 	bool ShouldClose() const;
+	static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 
 public:
 	uint32_t GetWidth() const { return m_width; }

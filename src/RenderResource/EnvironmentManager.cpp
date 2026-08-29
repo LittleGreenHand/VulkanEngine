@@ -1,188 +1,41 @@
-#include "VulkanUtil.h"
-#include "VulkanRenderer.h"
-#include "imgui.h"
-
-VulkanRenderer* vkUtils::vulkanRenderer = nullptr;
-bool vkUtils::init = false;
-bool vkUtils::debugUtilsSupported = false;
-PFN_vkCreateDebugUtilsMessengerEXT vkUtils::vkCreateDebugUtilsMessengerEXT{ nullptr };
-PFN_vkDestroyDebugUtilsMessengerEXT vkUtils::vkDestroyDebugUtilsMessengerEXT{ nullptr };
-PFN_vkCmdBeginDebugUtilsLabelEXT vkUtils::vkCmdBeginDebugUtilsLabelEXT{ nullptr };
-PFN_vkCmdInsertDebugUtilsLabelEXT vkUtils::vkCmdInsertDebugUtilsLabelEXT{ nullptr };
-PFN_vkCmdEndDebugUtilsLabelEXT vkUtils::vkCmdEndDebugUtilsLabelEXT{ nullptr };
-PFN_vkQueueBeginDebugUtilsLabelEXT vkUtils::vkQueueBeginDebugUtilsLabelEXT{ nullptr };
-PFN_vkQueueInsertDebugUtilsLabelEXT vkUtils::vkQueueInsertDebugUtilsLabelEXT{ nullptr };
-PFN_vkQueueEndDebugUtilsLabelEXT vkUtils::vkQueueEndDebugUtilsLabelEXT{ nullptr };
-PFN_vkSetDebugUtilsObjectNameEXT vkUtils::vkSetDebugUtilsObjectNameEXT{ nullptr };
-
-VulkanRenderer* vkUtils::GetVulkanRenderer()
+#include "EnvironmentManager.h"
+#include "Render/VulkanContext.h"
+#include "Render/VulkanRenderer.h"
+#include "MeshManager.h"
+#include "Render/VulkanDebugUtils.h"
+void EnvironmentManager::Destroy()
 {
-	return vulkanRenderer;
-}
-
-VkDevice vkUtils::GetVkDevice()
-{
-	return vulkanRenderer->vulkanDevice->logicalDevice;
-}
-
-VkInstance vkUtils::GetVkInstance()
-{
-	return vulkanRenderer->instance;
-}
-
-void vkUtils::Init(VulkanRenderer* Engine)
-{
-	vulkanRenderer = Engine;
-	InitDebugUtils();
-	init = true;
-}
-
-void vkUtils::CleanUp()
-{
-	vulkanRenderer = nullptr;
-	init = false;
-}
-
-// Checks if debug utils are supported (usually only when a graphics debugger is active) and does the setup necessary to use this debug utils
-void vkUtils::InitDebugUtils()
-{
-	// Check if the debug utils extension is present (which is the case if run from a graphics debugger)
-	bool extensionPresent = false;
-	uint32_t extensionCount;
-	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-	std::vector<VkExtensionProperties> extensions(extensionCount);
-	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
-	for (auto& extension : extensions) {
-		if (strcmp(extension.extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0) {
-			extensionPresent = true;
-			break;
-		}
-	}
-
-	if (extensionPresent) {
-		auto instance = vulkanRenderer->instance;
-		// As with an other extension, function pointers need to be manually loaded
-		vkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
-		vkDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
-		vkCmdBeginDebugUtilsLabelEXT = reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT"));
-		vkCmdInsertDebugUtilsLabelEXT = reinterpret_cast<PFN_vkCmdInsertDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkCmdInsertDebugUtilsLabelEXT"));
-		vkCmdEndDebugUtilsLabelEXT = reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT"));
-		vkQueueBeginDebugUtilsLabelEXT = reinterpret_cast<PFN_vkQueueBeginDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkQueueBeginDebugUtilsLabelEXT"));
-		vkQueueInsertDebugUtilsLabelEXT = reinterpret_cast<PFN_vkQueueInsertDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkQueueInsertDebugUtilsLabelEXT"));
-		vkQueueEndDebugUtilsLabelEXT = reinterpret_cast<PFN_vkQueueEndDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkQueueEndDebugUtilsLabelEXT"));
-		vkSetDebugUtilsObjectNameEXT = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT"));
-
-		// Set flag if at least one function pointer is present
-		debugUtilsSupported = (vkCreateDebugUtilsMessengerEXT != VK_NULL_HANDLE);
-	}
-	else {
-		std::cout << "Warning: " << VK_EXT_DEBUG_UTILS_EXTENSION_NAME << " not present, debug utils are disabled.";
-		std::cout << "Try running the sample from inside a Vulkan graphics debugger (e.g. RenderDoc)" << std::endl;
-	}
-}
-
-void vkUtils::cmdBeginLabel(VkCommandBuffer command_buffer, const char* label_name, std::vector<float> color)
-{
-	if (!debugUtilsSupported) {
-		return;
-	}
-	VkDebugUtilsLabelEXT label = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
-	label.pLabelName = label_name;
-	memcpy(label.color, color.data(), sizeof(float) * 4);
-	vkCmdBeginDebugUtilsLabelEXT(command_buffer, &label);
-}
-
-void vkUtils::cmdInsertLabel(VkCommandBuffer command_buffer, const char* label_name, std::vector<float> color)
-{
-	if (!debugUtilsSupported) {
-		return;
-	}
-	VkDebugUtilsLabelEXT label = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
-	label.pLabelName = label_name;
-	memcpy(label.color, color.data(), sizeof(float) * 4);
-	vkCmdInsertDebugUtilsLabelEXT(command_buffer, &label);
-}
-
-void vkUtils::cmdEndLabel(VkCommandBuffer command_buffer)
-{
-	if (!debugUtilsSupported) {
-		return;
-	}
-	vkCmdEndDebugUtilsLabelEXT(command_buffer);
-}
-
-// Functions for putting labels into a queue
-// Labels consist of a name and an optional color
-// How or if these are diplayed depends on the debugger used (RenderDoc e.g. displays both)
-
-void vkUtils::queueBeginLabel(VkQueue queue, const char* label_name, std::vector<float> color)
-{
-	if (!debugUtilsSupported) {
-		return;
-	}
-	VkDebugUtilsLabelEXT label = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
-	label.pLabelName = label_name;
-	memcpy(label.color, color.data(), sizeof(float) * 4);
-	vkQueueBeginDebugUtilsLabelEXT(queue, &label);
-}
-
-void vkUtils::queueInsertLabel(VkQueue queue, const char* label_name, std::vector<float> color)
-{
-	if (!debugUtilsSupported) {
-		return;
-	}
-	VkDebugUtilsLabelEXT label = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
-	label.pLabelName = label_name;
-	memcpy(label.color, color.data(), sizeof(float) * 4);
-	vkQueueInsertDebugUtilsLabelEXT(queue, &label);
-}
-
-void vkUtils::queueEndLabel(VkQueue queue)
-{
-	if (!debugUtilsSupported) {
-		return;
-	}
-	vkQueueEndDebugUtilsLabelEXT(queue);
-}
-
-// Function for naming Vulkan objects
-// In Vulkan, all objects (that can be named) are opaque unsigned 64 bit handles, and can be cased to uint64_t
-void vkUtils::setObjectDebugName(VkObjectType object_type, uint64_t object_handle, std::string object_name)
-{
-	if (!debugUtilsSupported) {
-		return;
-	}
-	VkDebugUtilsObjectNameInfoEXT name_info = { VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
-	name_info.objectType = object_type;
-	name_info.objectHandle = object_handle;
-	name_info.pObjectName = object_name.c_str();
-	vkSetDebugUtilsObjectNameEXT(vulkanRenderer->device, &name_info);
-}
-
-void vkUtils::InitModelsSourceDebugName(std::map<GLTFModels, vkglTF::Model>& models)
-{
-	for (auto& [key, model] : models)
+	if (isIBLTexturesLoaded)
 	{
-		for (int i = 0; i < model.materials.size(); i++)
-		{
-			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)model.materials[i].descriptorSet, model.modelName + "_Material_" + std::to_string(i) + "DescriptorSet");
-		}
-		for(int i = 0; i<model.linearNodes.size(); i++)
-		{
-			if (model.linearNodes[i]->mesh)
-			{
-				vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)model.linearNodes[i]->mesh->uniformBuffer.descriptorSet, model.linearNodes[i]->name + "_MeshDescriptorSet");
-			}
-		}
+		IBL.environmentCube.destroy();
+		IBL.irradianceCube.destroy();
+		IBL.prefilteredCube.destroy();
+		IBL.lutBrdf.destroy();
 	}
+	isIBLTexturesLoaded = false;
 }
 
-void vkUtils::generateBRDFLUT(vks::Texture2D& lutBrdf)
+void EnvironmentManager::LoadIBLTextures()
 {
-	if (!init)
-		return;
+	auto vulkanDevice = VulkanContext::GetVulkanDevice();
+	IBL.environmentCube.loadFromFile(getAssetPath() + "textures/hdr/gcanyon_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, VulkanContext::GetGraphicsQueue(), VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, true);
+
+
+	GenerateBRDFLUT(IBL.lutBrdf);
+	GenerateIrradianceCube(IBL.irradianceCube, IBL.environmentCube);
+	GeneratePrefilteredCube(IBL.prefilteredCube, IBL.environmentCube);
+	VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)IBL.environmentCube.image, "environmentCube");
+	VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)IBL.lutBrdf.image, "LutBRDF");
+	VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)IBL.irradianceCube.image, "irradianceCube");
+	VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)IBL.prefilteredCube.image, "prefilteredCube");
+	isIBLTexturesLoaded = true;
+}
+
+void EnvironmentManager::GenerateBRDFLUT(vks::Texture2D& lutBrdf)
+{
 	auto tStart = std::chrono::high_resolution_clock::now();
 
+	auto vulkanRenderer = VulkanContext::GetVulkanRenderer();
 	const VkFormat format = VK_FORMAT_R16G16_SFLOAT;	// R16G16 is supported pretty much everywhere
 	const int32_t dim = 512;
 
@@ -366,9 +219,9 @@ void vkUtils::generateBRDFLUT(vks::Texture2D& lutBrdf)
 	vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 	vkCmdDraw(cmdBuf, 3, 1, 0, 0);
 	vkCmdEndRenderPass(cmdBuf);
-	vulkanRenderer->vulkanDevice->flushCommandBuffer(cmdBuf, vulkanRenderer->queue);
+	vulkanRenderer->vulkanDevice->flushCommandBuffer(cmdBuf, vulkanRenderer->m_queue);
 
-	vkQueueWaitIdle(vulkanRenderer->queue);
+	vkQueueWaitIdle(vulkanRenderer->m_queue);
 
 	vkDestroyPipeline(vulkanRenderer->device, pipeline, nullptr);
 	vkDestroyPipelineLayout(vulkanRenderer->device, pipelinelayout, nullptr);
@@ -377,18 +230,16 @@ void vkUtils::generateBRDFLUT(vks::Texture2D& lutBrdf)
 	vkDestroyDescriptorSetLayout(vulkanRenderer->device, descriptorsetlayout, nullptr);
 	vkDestroyDescriptorPool(vulkanRenderer->device, descriptorpool, nullptr);
 
-	setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)lutBrdf.image, "LutBRDF");
 	auto tEnd = std::chrono::high_resolution_clock::now();
 	auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
 	std::cout << "Generating BRDF LUT took " << tDiff << " ms" << std::endl;
 }
 
-void vkUtils::generateIrradianceCube(vks::TextureCubeMap& irradianceCube, vks::TextureCubeMap& environmentCube)
+void EnvironmentManager::GenerateIrradianceCube(vks::TextureCubeMap& irradianceCube, vks::TextureCubeMap& environmentCube)
 {
-	if (!init)
-		return;
 	auto tStart = std::chrono::high_resolution_clock::now();
 
+	auto vulkanRenderer = VulkanContext::GetVulkanRenderer();
 	const VkFormat format = VK_FORMAT_R32G32B32A32_SFLOAT;
 	const int32_t dim = 64;
 	const uint32_t numMips = static_cast<uint32_t>(floor(log2(dim))) + 1;
@@ -551,7 +402,7 @@ void vkUtils::generateIrradianceCube(vks::TextureCubeMap& irradianceCube, vks::T
 			VK_IMAGE_ASPECT_COLOR_BIT,
 			VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-		vulkanRenderer->vulkanDevice->flushCommandBuffer(layoutCmd, vulkanRenderer->queue, true);
+		vulkanRenderer->vulkanDevice->flushCommandBuffer(layoutCmd, vulkanRenderer->m_queue, true);
 	}
 
 	// Descriptors
@@ -690,7 +541,7 @@ void vkUtils::generateIrradianceCube(vks::TextureCubeMap& irradianceCube, vks::T
 			vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 			vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelinelayout, 0, 1, &descriptorset, 0, NULL);
 
-			vulkanRenderer->skybox.draw(cmdBuf);
+			MeshManager::Get().skybox.draw(cmdBuf);
 
 			vkCmdEndRenderPass(cmdBuf);
 
@@ -746,7 +597,7 @@ void vkUtils::generateIrradianceCube(vks::TextureCubeMap& irradianceCube, vks::T
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		subresourceRange);
 
-	vulkanRenderer->vulkanDevice->flushCommandBuffer(cmdBuf, vulkanRenderer->queue);
+	vulkanRenderer->vulkanDevice->flushCommandBuffer(cmdBuf, vulkanRenderer->m_queue);
 
 	vkDestroyRenderPass(vulkanRenderer->device, renderpass, nullptr);
 	vkDestroyFramebuffer(vulkanRenderer->device, offscreen.framebuffer, nullptr);
@@ -758,18 +609,16 @@ void vkUtils::generateIrradianceCube(vks::TextureCubeMap& irradianceCube, vks::T
 	vkDestroyPipeline(vulkanRenderer->device, pipeline, nullptr);
 	vkDestroyPipelineLayout(vulkanRenderer->device, pipelinelayout, nullptr);
 
-	setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)irradianceCube.image, "irradianceCube");
 	auto tEnd = std::chrono::high_resolution_clock::now();
 	auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
 	std::cout << "Generating irradiance cube with " << numMips << " mip levels took " << tDiff << " ms" << std::endl;
 }
 
-void vkUtils::generatePrefilteredCube(vks::TextureCubeMap& prefilteredCube, vks::TextureCubeMap& environmentCube)
+void EnvironmentManager::GeneratePrefilteredCube(vks::TextureCubeMap& prefilteredCube, vks::TextureCubeMap& environmentCube)
 {
-	if (!init)
-		return;
 	auto tStart = std::chrono::high_resolution_clock::now();
 
+	auto vulkanRenderer = VulkanContext::GetVulkanRenderer();
 	const VkFormat format = VK_FORMAT_R16G16B16A16_SFLOAT;
 	const int32_t dim = 512;
 	const uint32_t numMips = static_cast<uint32_t>(floor(log2(dim))) + 1;
@@ -932,7 +781,7 @@ void vkUtils::generatePrefilteredCube(vks::TextureCubeMap& prefilteredCube, vks:
 			VK_IMAGE_ASPECT_COLOR_BIT,
 			VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-		vulkanRenderer->vulkanDevice->flushCommandBuffer(layoutCmd, vulkanRenderer->queue, true);
+		vulkanRenderer->vulkanDevice->flushCommandBuffer(layoutCmd, vulkanRenderer->m_queue, true);
 	}
 
 	// Descriptors
@@ -1071,7 +920,7 @@ void vkUtils::generatePrefilteredCube(vks::TextureCubeMap& prefilteredCube, vks:
 			vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 			vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelinelayout, 0, 1, &descriptorset, 0, NULL);
 
-			vulkanRenderer->skybox.draw(cmdBuf);
+			MeshManager::Get().skybox.draw(cmdBuf);
 
 			vkCmdEndRenderPass(cmdBuf);
 
@@ -1127,7 +976,7 @@ void vkUtils::generatePrefilteredCube(vks::TextureCubeMap& prefilteredCube, vks:
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		subresourceRange);
 
-	vulkanRenderer->vulkanDevice->flushCommandBuffer(cmdBuf, vulkanRenderer->queue);
+	vulkanRenderer->vulkanDevice->flushCommandBuffer(cmdBuf, vulkanRenderer->m_queue);
 
 	vkDestroyRenderPass(vulkanRenderer->device, renderpass, nullptr);
 	vkDestroyFramebuffer(vulkanRenderer->device, offscreen.framebuffer, nullptr);
@@ -1139,338 +988,7 @@ void vkUtils::generatePrefilteredCube(vks::TextureCubeMap& prefilteredCube, vks:
 	vkDestroyPipeline(vulkanRenderer->device, pipeline, nullptr);
 	vkDestroyPipelineLayout(vulkanRenderer->device, pipelinelayout, nullptr);
 
-	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)prefilteredCube.image, "prefilteredCube");
 	auto tEnd = std::chrono::high_resolution_clock::now();
 	auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
 	std::cout << "Generating pre-filtered enivornment cube with " << numMips << " mip levels took " << tDiff << " ms" << std::endl;
-}
-
-glm::quat vkUtils::eularToQuaternion(const glm::vec3& euler)
-{
-	// 将角度转换为弧度
-	glm::vec3 radians = glm::radians(euler);
-
-	// 计算各个轴的旋转四元数
-	glm::quat pitch = glm::angleAxis(radians.x, glm::vec3(1.0f, 0.0f, 0.0f));
-	glm::quat yaw = glm::angleAxis(radians.y, glm::vec3(0.0f, 1.0f, 0.0f));
-	glm::quat roll = glm::angleAxis(radians.z, glm::vec3(0.0f, 0.0f, 1.0f));
-
-	// 组合旋转：注意旋转顺序是xyz
-	// 因为GLM使用的是右乘，旋转顺序是从右到左应用
-	return roll * yaw * pitch;
-}
-
-glm::vec3 vkUtils::generateUpVector(const glm::vec3& forward) {
-	// 找到与forward不共线的垂直向量
-	glm::vec3 ref = (std::abs(forward.x) > std::abs(forward.z))
-		? glm::vec3(forward.z, 0, -forward.x)  // 与X-Z平面垂直
-		: glm::vec3(0, -forward.z, forward.y); // 与Y-Z平面垂直
-	return glm::normalize(ref);
-}
-
-// 在类中添加静态变量跟踪选中的节点
-vkglTF::Node* vkUtils::selectedNode = nullptr;
-
-void vkUtils::DrawNodeTree(vkglTF::Node* node, int& nodeId)
-{
-	if (!node) return;
-
-	// 保存当前节点ID
-	int originalNodeId = nodeId;
-	std::string baseId = std::to_string(originalNodeId);
-
-	// 处理节点名称
-	std::string displayName = node->name.empty() ? "Unnamed Node" : node->name;
-	displayName += "##node_" + baseId;
-
-	// 节点是否可展开
-	bool isExpandable = !node->children.empty();
-	ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow;
-
-	// 选中节点高亮显示
-	if (selectedNode == node)
-	{
-		flags |= ImGuiTreeNodeFlags_Selected;
-	}
-	if (!isExpandable)
-	{
-		flags |= ImGuiTreeNodeFlags_Leaf;
-	}
-
-	// 绘制可见性复选框
-	ImGui::Checkbox(("##vis_" + baseId).c_str(), &node->visible);
-	ImGui::SameLine(0, 4);
-
-	// 绘制节点树
-	bool isOpen = ImGui::TreeNodeEx(displayName.c_str(), flags);
-	if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) 
-	{
-		if(selectedNode == node)
-			selectedNode = nullptr; // 再次单击已选中节点，取消选择
-		else
-			selectedNode = node; // 单击节点文本区域，选中当前节点
-	}
-
-	// 递增节点ID
-	nodeId++;
-
-	// 递归绘制子节点
-	if (isOpen && isExpandable)
-	{
-		for (vkglTF::Node* child : node->children)
-		{
-			DrawNodeTree(child, nodeId);
-		}
-		ImGui::TreePop();
-	}
-	else if (!isExpandable)
-	{
-		ImGui::TreePop();
-	}
-}
-
-// 新增函数：绘制属性编辑面板
-void vkUtils::DrawNodePropertiesPanel()
-{
-	if (!selectedNode)
-	{
-		ImGui::Text("Select a node to edit properties");
-		return;
-	}
-
-	// 属性面板标题
-	ImGui::Text("Node: %s",
-		selectedNode->name.empty() ? "Unnamed Node" : selectedNode->name.c_str());
-	ImGui::Separator();
-
-	// 节点名称编辑
-	char nameBuffer[256];
-	strncpy_s(nameBuffer, selectedNode->name.c_str(), sizeof(nameBuffer) - 1);
-	nameBuffer[sizeof(nameBuffer) - 1] = '\0';
-	if (ImGui::InputText("Name", nameBuffer, sizeof(nameBuffer)))
-	{
-		selectedNode->name = nameBuffer;
-	}
-
-	// 可见性控制
-	ImGui::Checkbox("Visible", &selectedNode->visible);
-
-	// 平移
-	ImGui::InputFloat3("Translation", &selectedNode->translation.x);
-
-	// 旋转 (欧拉角)
-	glm::vec3 rotationEuler = glm::eulerAngles(selectedNode->rotation) * (180.0f / glm::pi<float>());
-	if (ImGui::InputFloat3("Rotation (deg)", &rotationEuler.x))
-	{
-		selectedNode->rotation = glm::quat(glm::radians(rotationEuler));
-	}
-
-	// 缩放
-	ImGui::InputFloat3("Scale", &selectedNode->scale.x);
-	ImGui::Separator();
-	ImGui::Separator();
-	ImGui::Separator();
-
-	// 材质属性（如果有网格）
-	if (selectedNode->mesh)
-	{
-		ImGui::Text(" ");
-		ImGui::Text(" ");
-		ImGui::Text("Material Properties");
-		ImGui::Separator();
-		ImGui::Text("Mesh: %s", selectedNode->mesh->name.c_str());
-
-		for (int i = 0; i < selectedNode->mesh->primitives.size(); ++i)
-		{
-			auto& primitive = selectedNode->mesh->primitives[i];
-			auto& material = primitive->material;
-
-			ImGui::PushID(i);
-			ImGui::Text("Primitive %d Material", (int)i);
-			ImGui::Separator();
-
-			ImGui::ColorEdit4("基础颜色", &material.materialParameters.baseColorFactor.x);
-			ImGui::SliderFloat("金属度", &material.materialParameters.metallicFactor, 0.0f, 1.0f);
-			ImGui::SliderFloat("粗糙度", &material.materialParameters.roughnessFactor, 0.0f, 1.0f);
-			ImGui::SliderFloat("Alpha裁切系数", &material.materialParameters.alphaCutoff, 0.0f, 1.0f);
-			ImGui::SliderFloat("透明度", &material.materialParameters.alphaFactor, 0.0f, 1.0f);
-			ImGui::SliderFloat("Anisotropic Factor", &material.materialParameters.anisotropicFactor, -1.0f, 1.0f);
-			ImGui::InputFloat4("tangent", &material.materialParameters.tangent.x);
-
-			const char* alphaModes[] = { "不透明", "遮罩", "透明" };
-			ImGui::Combo("Alpha Mode", (int*)&material.alphaMode, alphaModes, IM_ARRAYSIZE(alphaModes));
-			// 定义纹理参数与对应显示文本的映射关系
-			std::vector<std::pair<bool, const char*>> textureInfo = {
-				{!material.materialParameters.baseColorTextureEmpty, "Base Color Texture: Present"},
-				{!material.materialParameters.normalTextureEmpty, "Normal Texture: Present"},
-				{!material.materialParameters.metallicRoughnessTextureEmpty, "Metallic-Roughness Texture: Present"},
-				{!material.materialParameters.metallicTextureEmpty, "Metallic Texture: Present"},
-				{!material.materialParameters.roughnessTextureEmpty, "Roughness Texture: Present"},
-				{!material.materialParameters.occlusionTextureEmpty, "Occlusion Texture: Present"},
-				{!material.materialParameters.emissiveTextureEmpty, "Emissive Texture: Present"},
-				{!material.materialParameters.AOTextureEmpty, "AO Texture: Present"},
-				{!material.materialParameters.diffuseTextureEmpty, "Diffuse Texture: Present"},
-				{!material.materialParameters.specularGlossinessTextureEmpty, "Specular-Glossiness Texture: Present"}
-			};
-
-			// 循环显示存在的纹理信息
-			for (const auto& [isPresent, text] : textureInfo) {
-				if (isPresent) {
-					ImGui::Text("%s", text);
-				}
-			}
-
-			ImGui::Separator();
-			ImGui::Separator();
-			ImGui::Text(" ");
-			ImGui::PopID();
-		}
-	}
-	selectedNode->update();
-	// 取消选择按钮
-	if (ImGui::Button("Deselect"))
-	{
-		selectedNode = nullptr;
-	}
-}
-
-Dimensions vkUtils::GetSceneDimensions()
-{
-	Dimensions dimension;
-	dimension.min = glm::vec3(FLT_MAX);
-	dimension.max = glm::vec3(-FLT_MAX);
-	for (auto& [key, model] : vulkanRenderer->models)
-	{
-		model.getSceneDimensions();
-		if (dimension.min.x > model.dimensions.min.x) { dimension.min.x = model.dimensions.min.x; }
-		if (dimension.min.y > model.dimensions.min.y) { dimension.min.y = model.dimensions.min.y; }
-		if (dimension.min.z > model.dimensions.min.z) { dimension.min.z = model.dimensions.min.z; }
-		if (dimension.max.x < model.dimensions.max.x) { dimension.max.x = model.dimensions.max.x; }
-		if (dimension.max.y < model.dimensions.max.y) { dimension.max.y = model.dimensions.max.y; }
-		if (dimension.max.z < model.dimensions.max.z) { dimension.max.z = model.dimensions.max.z; }
-	}
-	dimension.size = dimension.max - dimension.min;
-	dimension.center = (dimension.min + dimension.max) / 2.0f;
-	dimension.radius = glm::distance(dimension.min, dimension.max) / 2.0f;
-	return dimension;
-}
-
-void vkUtils::transitionImageLayout(VkCommandBuffer cmd, vks::Texture& texture, VkImageLayout newLayout, VkImageAspectFlags aspectMask, VkPipelineStageFlags2 srcStageMask, VkAccessFlags2 srcAccessMask, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask)
-{
-	if(texture.imageLayout == newLayout)
-		return;
-	//VkImageMemoryBarrier2 是Vulkan1.3引入的扩展（VK_KHR_synchronization2）中定义的同步原语，用于更精细地控制图像内存访问顺序和布局转换
-	VkImageMemoryBarrier2 imageBarrier{ .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
-	imageBarrier.pNext = nullptr;
-
-	//VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT 是一个特殊的管线阶段标志，用于表示所有可能的管线阶段
-	imageBarrier.srcStageMask = srcStageMask;//指定哪些管线阶段必须在屏障前完成
-	imageBarrier.srcAccessMask = srcAccessMask;//确保内存写入在屏障前完成
-	imageBarrier.dstStageMask = dstStageMask;//指定屏障后允许继续执行的管线阶段
-	imageBarrier.dstAccessMask = dstAccessMask;//指定屏障后允许对资源进行的具体访问操作（如读、写），确保数据一致性
-
-	imageBarrier.oldLayout = texture.imageLayout;
-	imageBarrier.newLayout = newLayout;
-
-	//指定图像的哪些子资源（Mip 层级、数组层）受屏障影响，要尽量缩小subresourceRange的范围（避免全局屏障）
-	imageBarrier.subresourceRange = vks::initializers::ImageSubresourceRange(aspectMask);
-
-	imageBarrier.image = texture.image;
-
-	VkDependencyInfo depInfo{};
-	depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-	depInfo.pNext = nullptr;
-
-	depInfo.imageMemoryBarrierCount = 1;
-	depInfo.pImageMemoryBarriers = &imageBarrier;
-
-	//在命令缓冲区中插入显式屏障，或者说在命令缓冲区中记录屏障指令，实际屏障的执行发生在GPU运行该命令缓冲区时（提交到队列后）
-	//vkCmdPipelineBarrier2强制GPU在屏障前完成srcStageMask指定的所有操作，并阻塞dstStageMask之前的操作，直到屏障完成
-	//过度使用屏障会破坏 GPU 并行性，应尽量合并多个屏障到一次调用
-	vkCmdPipelineBarrier2(cmd, &depInfo);
-	texture.imageLayout = newLayout;
-	texture.updateDescriptor();
-}
-
-void vkUtils::copyImageToImage(VkCommandBuffer cmd, vks::Texture& srcTexture, vks::Texture& dstTexture) {
-	assert(srcTexture.device != nullptr && dstTexture.device != nullptr && "Texture 的 device 指针不可为空");
-	assert(srcTexture.image != VK_NULL_HANDLE && dstTexture.image != VK_NULL_HANDLE && "源/目标图像句柄不可为空");
-	assert(srcTexture.view != VK_NULL_HANDLE && dstTexture.view != VK_NULL_HANDLE && "源/目标图像视图不可为空");
-	assert(srcTexture.width == dstTexture.width && srcTexture.height == dstTexture.height && "源/目标图像宽高必须一致");
-	assert(srcTexture.mipLevels == dstTexture.mipLevels && "源/目标图像 Mip 层级必须一致");
-	assert(srcTexture.layerCount == dstTexture.layerCount && "源/目标图像图层数量必须一致");
-	assert(srcTexture.format == dstTexture.format && "源/目标图像格式必须一致");
-
-	// 确定图像的 AspectMask（颜色/深度/模板）
-	VkImageAspectFlags aspectMask = 0;
-	switch (srcTexture.format) {
-		// 纯深度格式
-	case VK_FORMAT_D16_UNORM:
-	case VK_FORMAT_D32_SFLOAT:
-		aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-		break;
-		// 深度+模板格式（需确保 ImageView 创建时仅包含一个 Aspect，遵循 VUID-01976）
-	case VK_FORMAT_D16_UNORM_S8_UINT:
-	case VK_FORMAT_D24_UNORM_S8_UINT:
-	case VK_FORMAT_D32_SFLOAT_S8_UINT:
-		// 注意：此处默认使用深度 Aspect，若你需要复制模板，需改为 VK_IMAGE_ASPECT_STENCIL_BIT
-		// （需确保 ImageView 创建时的 Aspect 与此处一致）
-		aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-		break;
-		// 颜色格式（默认所有非深度/模板格式为颜色）
-	default:
-		aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		break;
-	}
-
-	// 保存原始布局（用于复制后恢复）
-	VkImageLayout srcOriginalLayout = srcTexture.imageLayout;
-	VkImageLayout dstOriginalLayout = dstTexture.imageLayout;
-
-	// 转换源/目标图像到复制所需布局
-	transitionImageLayout(cmd, srcTexture, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, aspectMask);
-	transitionImageLayout(cmd, dstTexture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, aspectMask);
-
-	// 配置复制区域（支持 Mip 层级和图层）
-	std::vector<VkImageCopy> copyRegions;
-	copyRegions.reserve(srcTexture.mipLevels * srcTexture.layerCount);
-
-	for (uint32_t mip = 0; mip < srcTexture.mipLevels; ++mip) {
-		for (uint32_t layer = 0; layer < srcTexture.layerCount; ++layer) {
-			VkImageCopy region{};
-			// 1. 源图像子资源配置
-			region.srcSubresource.aspectMask = aspectMask;    // 与上面确定的 Aspect 一致
-			region.srcSubresource.mipLevel = mip;             // 当前 Mip 层级
-			region.srcSubresource.baseArrayLayer = layer;     // 当前图层
-			region.srcSubresource.layerCount = 1;             // 每次复制 1 个图层
-			region.srcOffset = { 0, 0, 0 };                    // 复制起始偏移（左上角）
-
-			// 2. 目标图像子资源配置（与源完全对齐）
-			region.dstSubresource.aspectMask = aspectMask;
-			region.dstSubresource.mipLevel = mip;
-			region.dstSubresource.baseArrayLayer = layer;
-			region.dstSubresource.layerCount = 1;
-			region.dstOffset = { 0, 0, 0 };
-
-			// 3. 复制尺寸（Mip 层级缩放：原始尺寸 / 2^mip，确保不为 0）
-			region.extent.width = std::max(1U, srcTexture.width >> mip);    // 宽度缩放
-			region.extent.height = std::max(1U, srcTexture.height >> mip);  // 高度缩放
-			region.extent.depth = 1;                                        // 你的类无 depth，默认 2D 图像
-
-			copyRegions.push_back(region);
-		}
-	}
-
-	// --------------------------
-	// 步骤6：执行图像复制命令
-	// --------------------------
-	vkCmdCopyImage(
-		cmd,
-		srcTexture.image,                          // 源图像
-		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,      // 源布局（必须与转换后一致）
-		dstTexture.image,                          // 目标图像
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,      // 目标布局（必须与转换后一致）
-		static_cast<uint32_t>(copyRegions.size()), // 复制区域数量
-		copyRegions.data()                         // 复制区域数组
-	);
 }

@@ -28,6 +28,7 @@ set_target_properties(${PROJECT_NAME}
 target_compile_definitions(${PROJECT_NAME}
     PRIVATE
     ENGINE_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    SHADERS_DIR="${CMAKE_SOURCE_DIR}/shaders"
     SHADERS_SPV_DIR="${SHADERS_OUTPUT}"
 )
 

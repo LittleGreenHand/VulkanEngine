@@ -3,7 +3,7 @@
 #include "base/VulkanTexture.h"
 #include <glm/glm.hpp>
 
-constexpr uint32_t maxConcurrentFrames{ 2 };
+constexpr uint32_t MaxConcurrentFrames{ 2 };
 //描述符集在shader中的绑定索引，对应于types.slang中的声明
 enum DescriptorSetBindIndex {
 	LBI_GLOBAL = 0,

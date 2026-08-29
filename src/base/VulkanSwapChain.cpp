@@ -201,7 +201,7 @@ void VulkanSwapChain::create(uint32_t& width, uint32_t& height, bool vsync, bool
 	VkSwapchainCreateInfoKHR swapchainCI = {};
 	swapchainCI.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	swapchainCI.surface = surface;
-	swapchainCI.minImageCount = desiredNumberOfSwapchainImages;
+	swapchainCI.minImageCount = minImageCount = desiredNumberOfSwapchainImages;
 	swapchainCI.imageFormat = colorFormat;
 	swapchainCI.imageColorSpace = colorSpace;
 	swapchainCI.imageExtent = { swapchainExtent.width, swapchainExtent.height };

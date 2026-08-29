@@ -23,7 +23,7 @@
 #include "vulkan/vulkan.h"
 #include "VulkanDevice.h"
 #include "VulkanTexture.h"
-#include "types.hpp"
+#include "Types.hpp"
 
 
 #include <ktx.h>
@@ -385,7 +385,7 @@ namespace vkglTF
 	private:
 		void createEmptyTexture(VkQueue transferQueue);
 	public:
-		vks::VulkanDevice* device;
+		vks::VulkanDevice* device = nullptr;
 		VkDescriptorPool descriptorPool;
 		std::string modelName;
 
@@ -408,15 +408,16 @@ namespace vkglTF
 		std::vector<vks::Texture> textures;
 		std::vector<Material> materials;
 		std::vector<Animation> animations;
-
+		
 		Dimensions dimensions;
 
 		bool metallicRoughnessWorkflow = true;
 		bool buffersBound = false;
 		std::string path;
 
-		Model() {};
+		Model();
 		~Model();
+		void Destroy();
 		vks::Texture* getTexture(uint32_t index);
 		void loadNode(vkglTF::Node* parent, const tinygltf::Node& node, uint32_t nodeIndex, const tinygltf::Model& model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale);
 		void loadSkins(tinygltf::Model& gltfModel);

@@ -43,6 +43,7 @@ public:
 	//std::vector<VkImageView> imageViews{};
 	uint32_t queueNodeIndex{ UINT32_MAX };
 	uint32_t imageCount{ 0 };
+	uint32_t minImageCount{ 0 };
 
 	void InitSurfaceKHR(VkSurfaceKHR surfaceKHR);
 

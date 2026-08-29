@@ -1,5 +1,7 @@
 #include "PostProcess_ToneMapping.h"
 #include "PipelineBuilder.h"
+#include "base/VulkanInitializers.hpp"
+#include "VulkanDebugUtils.h"
 
 void PostProcessToneMapping::prepare()
 {
@@ -24,7 +26,7 @@ void PostProcessToneMapping::destroy()
 
 void PostProcessToneMapping::excute(VkCommandBuffer cmdBuffer, VkDescriptorImageInfo sampleImageInfo, VkImageView writeImage)
 {
-	vkUtils::cmdBeginLabel(cmdBuffer, "ToneMapping", { 1.0f, 1.0f, 1.0f });
+	VulkanDebugUtils::CmdBeginLabel(cmdBuffer, "ToneMapping", { 1.0f, 1.0f, 1.0f });
 
 	BindDescriptorSets(cmdBuffer, sampleImageInfo);
 	VkRenderingAttachmentInfo colorAttachment = vks::initializers::RenderingAttachmentInfo_Color(writeImage, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -34,7 +36,7 @@ void PostProcessToneMapping::excute(VkCommandBuffer cmdBuffer, VkDescriptorImage
 	vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
 	vkCmdEndRendering(cmdBuffer);
 
-	vkUtils::cmdEndLabel(cmdBuffer);
+	VulkanDebugUtils::CmdEndLabel(cmdBuffer);
 }
 
 void PostProcessToneMapping::BindDescriptorSets(VkCommandBuffer cmdBuffer, VkDescriptorImageInfo sampleImageInfo)
@@ -42,14 +44,14 @@ void PostProcessToneMapping::BindDescriptorSets(VkCommandBuffer cmdBuffer, VkDes
 	// 更新描述符集
 	{
 		std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
-		vks::initializers::writeDescriptorSet(descriptorSet[vkUtils::GetVulkanRenderer()->currentBuffer], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &sampleImageInfo)
+		vks::initializers::writeDescriptorSet(descriptorSet[VulkanContext::GetVulkanRenderer()->currentBuffer], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &sampleImageInfo)
 		};
 		vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
 	}
 	//绑定描述符集
 	{
-		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, LBI_GLOBAL, 1, &vkUtils::GetVulkanRenderer()->globalDescriptorSets[vkUtils::GetVulkanRenderer()->currentBuffer], 0, nullptr);
-		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, LBI_CUSTOM, 1, &descriptorSet[vkUtils::GetVulkanRenderer()->currentBuffer], 0, nullptr);
+		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, LBI_GLOBAL, 1, &VulkanContext::GetVulkanRenderer()->globalDescriptorSets[VulkanContext::GetVulkanRenderer()->currentBuffer], 0, nullptr);
+		vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, LBI_CUSTOM, 1, &descriptorSet[VulkanContext::GetVulkanRenderer()->currentBuffer], 0, nullptr);
 	}
 }
 void PostProcessToneMapping::prepareDescriptorSet()
@@ -65,7 +67,7 @@ void PostProcessToneMapping::prepareDescriptorSet()
 		descriptorLayoutCI.pBindings = setLayoutBindings.data();
 		descriptorLayoutCI.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &descriptorSetLayout));
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)descriptorSetLayout, "PostProcess_toneMapping DescriptorSetLayout ");
+		VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)descriptorSetLayout, "PostProcess_toneMapping DescriptorSetLayout ");
 	}
 
 	//创建描述符集
@@ -75,7 +77,7 @@ void PostProcessToneMapping::prepareDescriptorSet()
 		{
 			VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &descriptorSetLayout, 1);
 			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &descriptor));
-			vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)descriptor, "PostProcess_toneMapping DescriptorSet");
+			VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)descriptor, "PostProcess_toneMapping DescriptorSet");
 		}
 	}
 }
@@ -84,7 +86,7 @@ void PostProcessToneMapping::preparePipeline()
 {
 	std::array<VkDescriptorSetLayout, LBI_COUNT> setLayoutsVector;
 	setLayoutsVector.fill(VK_NULL_HANDLE);
-	setLayoutsVector[LBI_GLOBAL] = vkUtils::GetVulkanRenderer()->setLayouts[LBI_GLOBAL];
+	setLayoutsVector[LBI_GLOBAL] = VulkanContext::GetVulkanRenderer()->setLayouts[LBI_GLOBAL];
 	setLayoutsVector[LBI_CUSTOM] = descriptorSetLayout;
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = vks::initializers::pipelineLayoutCreateInfo(setLayoutsVector);
 	pipelineLayoutCreateInfo.setLayoutCount = LBI_COUNT;
@@ -94,9 +96,9 @@ void PostProcessToneMapping::preparePipeline()
 	PipelineBuilder builder(device);
 	//builder.setRasterizationState(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
 	builder.addShaderStage(fullScreenShaderStage);
-	builder.addShaderStage(vkUtils::GetVulkanRenderer()->loadShader(vkUtils::GetVulkanRenderer()->getShadersPath() + "PostProcess_toneMapping.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
-	VkPipelineRenderingCreateInfo renderInfo = vks::initializers::pipelineRenderingCreateInfo(1, &vkUtils::GetVulkanRenderer()->swapChain.colorFormat);
+	builder.addShaderStage(VulkanContext::GetVulkanRenderer()->loadShader(VulkanContext::GetVulkanRenderer()->getShadersPath() + "PostProcess_toneMapping.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
+	VkPipelineRenderingCreateInfo renderInfo = vks::initializers::pipelineRenderingCreateInfo(1, &VulkanContext::GetVulkanRenderer()->swapChain.colorFormat);
 
-	builder.buildPipeline(renderInfo, vkUtils::GetVulkanRenderer()->pipelineCache, pipelineLayout, pipeline);
-	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipeline, "PostProcess_toneMapping pipeline");
+	builder.buildPipeline(renderInfo, VulkanContext::GetVulkanRenderer()->pipelineCache, pipelineLayout, pipeline);
+	VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipeline, "PostProcess_toneMapping pipeline");
 }

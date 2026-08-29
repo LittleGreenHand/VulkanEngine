@@ -19,6 +19,23 @@ const std::string getShaderBasePath()
 {
 	return vks::tools::shadersSPVPath + "/";
 }
+
+std::filesystem::path GetAssetRootPath()
+{
+	return std::filesystem::path(ENGINE_SOURCE_DIR) / "assets";
+}
+
+std::filesystem::path GetShaderRootPath()
+{
+	return std::filesystem::path(SHADERS_DIR);
+}
+
+std::filesystem::path GetShaderSPVPath()
+{
+	return std::filesystem::path(SHADERS_SPV_DIR);
+}
+
+
 #endif
 
 namespace vks

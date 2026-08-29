@@ -1,6 +1,7 @@
 #pragma once
-#include <glm/glm.hpp>
 #include "PostProcessBase.h"
+#include <array>
+#include "Types.hpp"
 
 class PostProcessToneMapping : public PostProcessBase
 {
@@ -8,7 +9,7 @@ public:
 	VkPipeline pipeline{ VK_NULL_HANDLE };
 	VkPipelineLayout pipelineLayout{ VK_NULL_HANDLE };
 	VkDescriptorSetLayout descriptorSetLayout{ VK_NULL_HANDLE };
-	std::array<VkDescriptorSet, maxConcurrentFrames> descriptorSet;
+	std::array<VkDescriptorSet, MaxConcurrentFrames> descriptorSet;
 public:
 	void prepare();
 	void destroy();

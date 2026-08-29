@@ -2,6 +2,7 @@
 #include "PostProcess_ToneMapping.h"
 #include "PostProcess_DOF.h"
 #include "VulkanRenderer.h"
+#include "VulkanDebugUtils.h"
 
 vks::VulkanDevice* PostProcessBase::vulkanDevice = nullptr;
 VkDevice PostProcessBase::device = VK_NULL_HANDLE;
@@ -15,7 +16,7 @@ void PostProcessBase::preparePostProcessBase(vks::VulkanDevice* vulkandevice)
 	device = vulkanDevice->logicalDevice;
 
 	//预加载全屏三角形顶点着色器
-	fullScreenShaderStage = vkUtils::GetVulkanRenderer()->loadShader(vkUtils::GetVulkanRenderer()->getShadersPath() + "PostProcess_fullScreen.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+	fullScreenShaderStage = VulkanContext::GetVulkanRenderer()->loadShader(VulkanContext::GetVulkanRenderer()->getShadersPath() + "PostProcess_fullScreen.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
 
 	// 创建所有后处理共享的DescriptorPool
 	{
@@ -26,7 +27,7 @@ void PostProcessBase::preparePostProcessBase(vks::VulkanDevice* vulkandevice)
 		VkDescriptorPoolCreateInfo descriptorPoolInfo = vks::initializers::descriptorPoolCreateInfo(poolSizes, 32);
 		descriptorPoolInfo.flags |= VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
 		VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &descriptorPool));
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_POOL, (uint64_t)descriptorPool, "PostProcess DescriptorPool");
+		VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_POOL, (uint64_t)descriptorPool, "PostProcess DescriptorPool");
 	}
 }
 void PostProcessBase::cleanUp()

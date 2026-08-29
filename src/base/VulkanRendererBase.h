@@ -1,36 +1,11 @@
-/*
-* Vulkan Example base class
-*
-* Copyright (C) 2016-2025 by Sascha Willems - www.saschawillems.de
-*
-* This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
-*/
-
 #pragma once
 
 #ifdef _WIN32
-#pragma comment(linker, "/subsystem:windows")
+//#pragma comment(linker, "/subsystem:windows")
 #include <windows.h>
 #include <fcntl.h>
 #include <io.h>
 #include <ShellScalingAPI.h>
-#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
-#include <android/native_activity.h>
-#include <android/asset_manager.h>
-#include <android_native_app_glue.h>
-#include <sys/system_properties.h>
-#include "VulkanAndroid.h"
-#elif defined(VK_USE_PLATFORM_DIRECTFB_EXT)
-#include <directfb.h>
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-#include <wayland-client.h>
-#include "xdg-shell-client-protocol.h"
-#elif defined(_DIRECT2DISPLAY)
-//
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-#include <xcb/xcb.h>
-#elif (defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK) || defined(VK_USE_PLATFORM_METAL_EXT))
-#include <TargetConditionals.h>
 #endif
 
 #include <stdio.h>
@@ -62,7 +37,6 @@
 #include "base/CommandLineParser.hpp"
 #include "base/keycodes.hpp"
 #include "base/VulkanTools.h"
-#include "base/VulkanDebug.h"
 #include "base/VulkanSwapChain.h"
 #include "base/VulkanBuffer.h"
 #include "base/VulkanDevice.h"
@@ -71,9 +45,9 @@
 #include "base/VulkanInitializers.hpp"
 #include "base/camera.hpp"
 #include "base/benchmark.hpp"
-#include "types.hpp"
+#include "Types.hpp"
 
-
+//主要负责Vulkan的初始化
 class VulkanRendererBase
 {
 private:
@@ -120,13 +94,13 @@ public:
 	/** @brief Logical device, application's view of the physical device (GPU) */
 	VkDevice device{ VK_NULL_HANDLE };
 	// Handle to the device graphics queue that command buffers are submitted to
-	VkQueue queue{ VK_NULL_HANDLE };
+	VkQueue m_queue{ VK_NULL_HANDLE };
 	// Depth buffer format (selected during Vulkan initialization)
 	VkFormat depthFormat{VK_FORMAT_UNDEFINED};
 	// Command buffer pool
 	VkCommandPool cmdPool{ VK_NULL_HANDLE };
 	// Command buffers used for rendering
-	std::array<VkCommandBuffer, maxConcurrentFrames> drawCmdBuffers;
+	std::array<VkCommandBuffer, MaxConcurrentFrames> drawCmdBuffers;
 	//主渲染Pass，包含渲染目标和深度模板缓冲
 	RenderPassInfo mainRenderPass;
 	//// List of available frame buffers (same as number of swap chain images)
@@ -144,9 +118,9 @@ public:
 	// These are used to have multiple frame buffers "in flight" to get some CPU/GPU parallelism
 	uint32_t currentImageIndex{ 0 };
 	uint32_t currentBuffer{ 0 };
-	std::array<VkSemaphore, maxConcurrentFrames> presentCompleteSemaphores{};
+	std::array<VkSemaphore, MaxConcurrentFrames> presentCompleteSemaphores{};
 	std::vector<VkSemaphore> renderCompleteSemaphores{};
-	std::array<VkFence, maxConcurrentFrames> waitFences;
+	std::array<VkFence, MaxConcurrentFrames> waitFences;
 
 	bool requiresStencil{ false };
 public:
@@ -218,60 +192,6 @@ public:
 #if defined(_WIN32)
 	HWND window;
 	HINSTANCE windowInstance;
-#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
-	// true if application has focused, false if moved to background
-	bool focused = false;
-	struct TouchPos {
-		int32_t x;
-		int32_t y;
-	} touchPos{};
-	bool touchDown = false;
-	double touchTimer = 0.0;
-	int64_t lastTapTime = 0;
-#elif (defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK) || defined(VK_USE_PLATFORM_METAL_EXT))
-	void* view;
-#if defined(VK_USE_PLATFORM_METAL_EXT)
-	CAMetalLayer* metalLayer;
-#endif
-#if defined(VK_EXAMPLE_XCODE_GENERATED)
-	bool quit = false;
-#endif
-#elif defined(VK_USE_PLATFORM_DIRECTFB_EXT)
-	bool quit = false;
-	IDirectFB *dfb = nullptr;
-	IDirectFBDisplayLayer *layer = nullptr;
-	IDirectFBWindow *window = nullptr;
-	IDirectFBSurface *surface = nullptr;
-	IDirectFBEventBuffer *event_buffer = nullptr;
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-	wl_display *display = nullptr;
-	wl_registry *registry = nullptr;
-	wl_compositor *compositor = nullptr;
-	struct xdg_wm_base *shell = nullptr;
-	wl_seat *seat = nullptr;
-	wl_pointer *pointer = nullptr;
-	wl_keyboard *keyboard = nullptr;
-	wl_surface *surface = nullptr;
-	struct xdg_surface *xdg_surface;
-	struct xdg_toplevel *xdg_toplevel;
-	bool quit = false;
-	bool configured = false;
-
-#elif defined(_DIRECT2DISPLAY)
-	bool quit = false;
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-	bool quit = false;
-	xcb_connection_t *connection;
-	xcb_screen_t *screen;
-	xcb_window_t window;
-	xcb_intern_atom_reply_t *atom_wm_delete_window;
-#elif defined(VK_USE_PLATFORM_HEADLESS_EXT)
-	bool quit = false;
-#elif defined(VK_USE_PLATFORM_SCREEN_QNX)
-	screen_context_t screen_context = nullptr;
-	screen_window_t screen_window = nullptr;
-	screen_event_t screen_event = nullptr;
-	bool quit = false;
 #endif
 
 	/** @brief Default base class constructor */
@@ -287,58 +207,9 @@ public:
 	void setupDPIAwareness();
 	HWND setupWindow(HINSTANCE hinstance, WNDPROC wndproc);
 	void handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
-	static int32_t handleAppInput(struct android_app* app, AInputEvent* event);
-	static void handleAppCommand(android_app* app, int32_t cmd);
-#elif (defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK) || defined(VK_USE_PLATFORM_METAL_EXT))
-	void* setupWindow(void* view);
-	void displayLinkOutputCb();
-	void mouseDragged(float x, float y);
-	void windowWillResize(float x, float y);
-	void windowDidResize();
-#elif defined(VK_USE_PLATFORM_DIRECTFB_EXT)
-	IDirectFBSurface *setupWindow();
-	void handleEvent(const DFBWindowEvent *event);
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-	struct xdg_surface *setupWindow();
-	void initWaylandConnection();
-	void setSize(int width, int height);
-	static void registryGlobalCb(void *data, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version);
-	void registryGlobal(struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version);
-	static void registryGlobalRemoveCb(void *data, struct wl_registry *registry, uint32_t name);
-	static void seatCapabilitiesCb(void *data, wl_seat *seat, uint32_t caps);
-	void seatCapabilities(wl_seat *seat, uint32_t caps);
-	static void pointerEnterCb(void *data, struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface, wl_fixed_t sx, wl_fixed_t sy);
-	static void pointerLeaveCb(void *data, struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface);
-	static void pointerMotionCb(void *data, struct wl_pointer *pointer, uint32_t time, wl_fixed_t sx, wl_fixed_t sy);
-	void pointerMotion(struct wl_pointer *pointer, uint32_t time, wl_fixed_t sx, wl_fixed_t sy);
-	static void pointerButtonCb(void *data, struct wl_pointer *wl_pointer, uint32_t serial, uint32_t time, uint32_t button, uint32_t state);
-	void pointerButton(struct wl_pointer *wl_pointer, uint32_t serial, uint32_t time, uint32_t button, uint32_t state);
-	static void pointerAxisCb(void *data, struct wl_pointer *wl_pointer, uint32_t time, uint32_t axis, wl_fixed_t value);
-	void pointerAxis(struct wl_pointer *wl_pointer, uint32_t time, uint32_t axis, wl_fixed_t value);
-	static void keyboardKeymapCb(void *data, struct wl_keyboard *keyboard, uint32_t format, int fd, uint32_t size);
-	static void keyboardEnterCb(void *data, struct wl_keyboard *keyboard, uint32_t serial, struct wl_surface *surface, struct wl_array *keys);
-	static void keyboardLeaveCb(void *data, struct wl_keyboard *keyboard, uint32_t serial, struct wl_surface *surface);
-	static void keyboardKeyCb(void *data, struct wl_keyboard *keyboard, uint32_t serial, uint32_t time, uint32_t key, uint32_t state);
-	void keyboardKey(struct wl_keyboard *keyboard, uint32_t serial, uint32_t time, uint32_t key, uint32_t state);
-	static void keyboardModifiersCb(void *data, struct wl_keyboard *keyboard, uint32_t serial, uint32_t mods_depressed, uint32_t mods_latched, uint32_t mods_locked, uint32_t group);
-
-#elif defined(_DIRECT2DISPLAY)
-//
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-	xcb_window_t setupWindow();
-	void initxcbConnection();
-	void handleEvent(const xcb_generic_event_t *event);
-#elif defined(VK_USE_PLATFORM_SCREEN_QNX)
-	void setupWindow();
-	void handleEvent();
-#else
-	void setupWindow();
 #endif
 	/** @brief (Virtual) Creates the application wide Vulkan instance */
 	virtual VkResult createInstance();
-	/** @brief (Pure virtual) Render function to be implemented by the sample application */
-	virtual void render() = 0;
 	/** @brief (Virtual) Called after a key was pressed, can be used to do custom key handling */
 	virtual void keyPressed(uint32_t);
 	/** @brief (Virtual) Called after the mouse cursor moved and before internal events (like camera rotation) is handled */

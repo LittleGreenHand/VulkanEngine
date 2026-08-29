@@ -40,3 +40,9 @@ set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL        OFF CACHE BOOL "" FORCE)
 add_subdirectory(thirdParty/glfw-3.5.1)
+
+
+set_target_properties(glfw PROPERTIES FOLDER "ThirdpartyLib")
+set_target_properties(update_mappings PROPERTIES FOLDER "ThirdpartyLib")
+set_target_properties(imgui PROPERTIES FOLDER "ThirdpartyLib")
+set_target_properties(ktx PROPERTIES FOLDER "ThirdpartyLib")

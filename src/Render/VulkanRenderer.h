@@ -29,6 +29,7 @@ enum PipelinesIndex {
 
 class PostProcessManager;
 
+// 主要负责渲染管线和渲染过程的管理
 class VulkanRenderer : public VulkanRendererBase
 {
 public:
@@ -37,23 +38,6 @@ public:
 	vkLight::VulkanPointLights pointLights;
 	vkLight::VulkanDirectLights directLight;
 	PostProcessManager* postProcessManager = nullptr;
-
-	struct Textures {
-		vks::TextureCubeMap environmentCube;
-		// Generated at runtime
-		vks::Texture2D lutBrdf;
-		vks::TextureCubeMap irradianceCube;
-		vks::TextureCubeMap prefilteredCube;
-		// Object texture maps
-		vks::Texture2D albedoMap;
-		vks::Texture2D normalMap;
-		vks::Texture2D aoMap;
-		vks::Texture2D metallicMap;
-		vks::Texture2D roughnessMap;
-	} textures{};
-
-	std::map<GLTFModels, vkglTF::Model> models;
-	vkglTF::Model skybox;
 
 	std::array<PipelineInfo, PL_Count> pipelines{};
 	std::array<VkDescriptorSetLayout, LBI_COUNT> setLayouts{};
@@ -75,10 +59,10 @@ public:
 	struct UniformBuffers {
 		vks::Buffer globalParamBuffer;
 	};
-	std::array<UniformBuffers, maxConcurrentFrames> globalParamBuffers;
+	std::array<UniformBuffers, MaxConcurrentFrames> globalParamBuffers;
 
 	//每帧独立使用的全局参数的描述符集
-	std::array<VkDescriptorSet, maxConcurrentFrames> globalDescriptorSets{};
+	std::array<VkDescriptorSet, MaxConcurrentFrames> globalDescriptorSets{};
 
 	VkPhysicalDeviceVulkan11Features Features11{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
 	VkPhysicalDeviceVulkan12Features features12{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
@@ -93,12 +77,15 @@ public:
 	void AddEnabledDeviceExtensions(int extensionCount, const char** extensions);
 	virtual void getEnabledExtensions() override;
 	void buildCommandBuffer();
-	void loadAssets();
+	void UpdateDebugInfo();
 	void prepareDescriptors();
 	void preparePipelines();
 	void prepareUniformBuffers();
 	void preparePostProcess();
 	void updateUniformBuffers();
-	virtual void render() override;
+	void render();
+	void BeginFrame(double deltaTime);
+	void EndFrame();
+	void DrawImGui();
 };
 

@@ -31,6 +31,7 @@
 #include "VulkanAndroid.h"
 #include <android/asset_manager.h>
 #endif
+#include <filesystem>
 
 // Custom define for better code readability
 #define VK_FLAGS_NONE 0
@@ -62,6 +63,9 @@
 
 const std::string getAssetPath();
 const std::string getShaderBasePath();
+std::filesystem::path GetAssetRootPath();
+std::filesystem::path GetShaderRootPath();
+std::filesystem::path GetShaderSPVPath();
 
 namespace vks
 {

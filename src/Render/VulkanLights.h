@@ -4,7 +4,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include "base/VulkanDevice.h"
-#include "types.hpp"
+#include "Types.hpp"
 #include "base/VulkanTexture.h"
 
 namespace vkLight

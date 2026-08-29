@@ -12,7 +12,8 @@ public:
 		static Application instance;
 		return instance;
 	}
-
+	Application() = default;
+	~Application() { Destroy(); }
 	Application(const Application&) = delete;
 	Application& operator=(const Application&) = delete;
 	Application(Application&&) = delete;
@@ -28,8 +29,7 @@ public:
 	void Render();
 	void EndFrame();
 private:
-	Application() = default;
-	~Application() { Destroy(); }
+	
 
 	static bool init;
 	VulkanRenderer* renderer = nullptr;

@@ -9,6 +9,8 @@
 */
 
 #include "VulkanBuffer.h"
+#include "Render/VulkanContext.h"
+#include "Render/VulkanDebugUtils.h"
 
 namespace vks
 {	
@@ -48,7 +50,14 @@ namespace vks
 	*/
 	VkResult Buffer::bind(VkDeviceSize offset)
 	{
-		return vkBindBufferMemory(device, buffer, memory, offset);
+		auto res = vkBindBufferMemory(device, buffer, memory, offset);
+		if (res == VK_SUCCESS)
+		{
+			static int count = 0;
+			std::string name = "bindBuffer" + std::to_string(count++);
+			VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)buffer, name);
+		}
+		return res;
 	}
 
 	/**

@@ -1,6 +1,9 @@
 #include "VulkanLights.h"
-#include "VulkanUtil.h"
+#include "VulkanContext.h"
 #include "PipelineBuilder.h"
+#include "RenderResource/MeshManager.h"
+#include "VulkanDebugUtils.h"
+#include "Math/MathUtils.h"
 
 VkDescriptorSetLayout vkLight::descriptorSetLayout{ VK_NULL_HANDLE };
 VkDescriptorSet vkLight::descriptorSet{ VK_NULL_HANDLE };
@@ -17,7 +20,7 @@ void vkLight::preperDescriptor(vks::VulkanDevice* vulkanDevice, VkDescriptorPool
 	};
 	VkDescriptorSetLayoutCreateInfo descriptorLayout = vks::initializers::descriptorSetLayoutCreateInfo(setLayoutBindings);
 	VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vulkanDevice->logicalDevice, &descriptorLayout, nullptr, &descriptorSetLayout));
-	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)descriptorSetLayout, "LightsDescriptorSetLayout");
+	VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)descriptorSetLayout, "LightsDescriptorSetLayout");
 	
 	//分配描述符集
 	VkDescriptorSetAllocateInfo allocInfo{};
@@ -26,7 +29,7 @@ void vkLight::preperDescriptor(vks::VulkanDevice* vulkanDevice, VkDescriptorPool
 	allocInfo.pSetLayouts = &descriptorSetLayout;
 	allocInfo.descriptorSetCount = 1;
 	VK_CHECK_RESULT(vkAllocateDescriptorSets(vulkanDevice->logicalDevice, &allocInfo, &descriptorSet));
-	vkUtils::setObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)descriptorSet, "LightsDescriptorSet");
+	VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)descriptorSet, "LightsDescriptorSet");
 
 	//创建Buffer
 	VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &lightBuffer, sizeof(LightUbo)));
@@ -88,7 +91,7 @@ namespace vkLight {
 
 		// Create cube map image
 		VK_CHECK_RESULT(vkCreateImage(device, &imageCreateInfo, nullptr, &lightResource.shadowCubeMap.image));
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)lightResource.shadowCubeMap.image, "PointLight ShadowCubeArray");
+		VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)lightResource.shadowCubeMap.image, "PointLight ShadowCubeArray");
 
 		vkGetImageMemoryRequirements(device, lightResource.shadowCubeMap.image, &memReqs);
 
@@ -109,7 +112,7 @@ namespace vkLight {
 			VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			subresourceRange);
-		vulkanDevice->flushCommandBuffer(layoutCmd, vkUtils::GetVulkanRenderer()->queue, true);
+		vulkanDevice->flushCommandBuffer(layoutCmd, VulkanContext::GetVulkanRenderer()->m_queue, true);
 		lightResource.shadowCubeMap.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 		// Create sampler
@@ -202,7 +205,7 @@ namespace vkLight {
 		depthStencilView.subresourceRange.layerCount = 1;
 
 		VK_CHECK_RESULT(vkCreateImage(device, &imageCreateInfo, nullptr, &renderPass.depthAttachment.image));
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)renderPass.depthAttachment.image, "PointLight DepthAttachment");
+		VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)renderPass.depthAttachment.image, "PointLight DepthAttachment");
 		VkMemoryRequirements memReqs;
 		vkGetImageMemoryRequirements(device, renderPass.depthAttachment.image, &memReqs);
 
@@ -220,7 +223,7 @@ namespace vkLight {
 			VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
-		vulkanDevice->flushCommandBuffer(layoutCmd, vkUtils::GetVulkanRenderer()->queue, true);
+		vulkanDevice->flushCommandBuffer(layoutCmd, VulkanContext::GetVulkanRenderer()->m_queue, true);
 
 		depthStencilView.image = renderPass.depthAttachment.image;
 		VK_CHECK_RESULT(vkCreateImageView(device, &depthStencilView, nullptr, &renderPass.depthAttachment.view));
@@ -311,11 +314,11 @@ namespace vkLight {
 		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
 
 		PipelineBuilder builder(device);
-		builder.addShaderStage(vkUtils::GetVulkanRenderer()->loadShader(vkUtils::GetVulkanRenderer()->getShadersPath() + "Light_point.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
-		builder.addShaderStage(vkUtils::GetVulkanRenderer()->loadShader(vkUtils::GetVulkanRenderer()->getShadersPath() + "Light_point.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
+		builder.addShaderStage(VulkanContext::GetVulkanRenderer()->loadShader(VulkanContext::GetVulkanRenderer()->getShadersPath() + "Light_point.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
+		builder.addShaderStage(VulkanContext::GetVulkanRenderer()->loadShader(VulkanContext::GetVulkanRenderer()->getShadersPath() + "Light_point.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
 		builder.setDepthStencilState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
-		builder.buildPipeline(renderPass.renderPass, vkUtils::GetVulkanRenderer()->pipelineCache, pipelineLayout, pipeline);
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipeline, "DirectLightShadowMapGenerate pipeline");
+		builder.buildPipeline(renderPass.renderPass, VulkanContext::GetVulkanRenderer()->pipelineCache, pipelineLayout, pipeline);
+		VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipeline, "DirectLightShadowMapGenerate pipeline");
 	}
 
 	void VulkanPointLights::preperViewMatrix()
@@ -339,7 +342,7 @@ namespace vkLight {
 
 	void VulkanPointLights::Render(VkCommandBuffer cmdBuffer)
 	{
-		vkUtils::cmdBeginLabel(cmdBuffer, "PointLightShadowCube", { 1.0f, 1.0f, 1.0f });
+		VulkanDebugUtils::CmdBeginLabel(cmdBuffer, "PointLightShadowCube", { 1.0f, 1.0f, 1.0f });
 
 		vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
@@ -374,7 +377,7 @@ namespace vkLight {
 					renderPassBeginInfo.framebuffer = lightResource.frameBuffers[index];
 					vkCmdBeginRenderPass(cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-					for (auto& [key, model] : vkUtils::GetVulkanRenderer()->models)
+					for (auto& [key, model] : MeshManager::Get().models)
 					{
 						vkCmdPushConstants(cmdBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::mat4) * 2, sizeof(glm::vec4), &lightData.pointLights[id].position);
 						model.drawWithPushConstant(cmdBuffer, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pipelineLayout, shadowProj * glm::translate(viewMatrix[face], glm::vec3(-lightData.pointLights[id].position)), true); 
@@ -385,7 +388,7 @@ namespace vkLight {
 			}
 		}
 
-		vkUtils::cmdEndLabel(cmdBuffer);
+		VulkanDebugUtils::CmdEndLabel(cmdBuffer);
 	}
 
 }
@@ -397,8 +400,8 @@ namespace vkLight {
 	{
 		float cascadeSplits[MAX_CASCADES];
 
-		float nearClip = vkUtils::GetVulkanRenderer()->camera.getNearClip();
-		float farClip = vkUtils::GetVulkanRenderer()->camera.getFarClip();
+		float nearClip = VulkanContext::GetVulkanRenderer()->camera.getNearClip();
+		float farClip = VulkanContext::GetVulkanRenderer()->camera.getFarClip();
 		float clipRange = farClip - nearClip;
 
 		float minZ = nearClip;
@@ -434,7 +437,7 @@ namespace vkLight {
 			};
 
 			// Project frustum corners into world space
-			glm::mat4 invCam = glm::inverse(vkUtils::GetVulkanRenderer()->camera.matrices.perspective * vkUtils::GetVulkanRenderer()->camera.matrices.view);
+			glm::mat4 invCam = glm::inverse(VulkanContext::GetVulkanRenderer()->camera.matrices.perspective * VulkanContext::GetVulkanRenderer()->camera.matrices.view);
 			for (int j = 0; j < 8; j++) {
 				glm::vec4 invCorner = invCam * glm::vec4(frustumCorners[j], 1.0f);
 				frustumCorners[j] = invCorner / invCorner.w;
@@ -464,12 +467,12 @@ namespace vkLight {
 			glm::vec3 minExtents = -maxExtents;
 
 			glm::vec3 lightDir = glm::normalize(-lightData.directLight.direct);
-			glm::vec3 up = vkUtils::generateUpVector(lightDir);
+			glm::vec3 up = MathUtils::GenerateUpVector(lightDir);
 			glm::mat4 lightViewMatrix = glm::lookAt(frustumCenter - lightDir * -minExtents.z, frustumCenter, up);
 			glm::mat4 lightOrthoMatrix = glm::ortho(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, 0.0f, maxExtents.z - minExtents.z);
 			lightOrthoMatrix[1][1] *= -1.0f;
 			// Store split distance and matrix in cascade
-			cascades[i].splitDepth = (vkUtils::GetVulkanRenderer()->camera.getNearClip() + splitDist * clipRange) * -1.0f;
+			cascades[i].splitDepth = (VulkanContext::GetVulkanRenderer()->camera.getNearClip() + splitDist * clipRange) * -1.0f;
 			cascades[i].viewProjMatrix = lightOrthoMatrix * lightViewMatrix;
 			cascades[i].viewMat = lightViewMatrix;
 			cascades[i].Proj = lightOrthoMatrix;
@@ -502,7 +505,7 @@ namespace vkLight {
 		image.format = shadowMapFormat;
 		image.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;		// We will sample directly from the depth attachment for the shadow mapping
 		VK_CHECK_RESULT(vkCreateImage(device, &image, nullptr, &renderPass.depthAttachment.image));
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)renderPass.depthAttachment.image, "DirectLightShadowTexture");
+		VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)renderPass.depthAttachment.image, "DirectLightShadowTexture");
 
 		VkMemoryAllocateInfo memAlloc = vks::initializers::memoryAllocateInfo();
 		VkMemoryRequirements memReqs;
@@ -525,7 +528,7 @@ namespace vkLight {
 			VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
 			subresourceRange);
 
-		vulkanDevice->flushCommandBuffer(layoutCmd, vkUtils::GetVulkanRenderer()->queue, true);
+		vulkanDevice->flushCommandBuffer(layoutCmd, VulkanContext::GetVulkanRenderer()->m_queue, true);
 		renderPass.depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 
 		VkImageViewCreateInfo depthStencilView = vks::initializers::imageViewCreateInfo();
@@ -667,21 +670,21 @@ namespace vkLight {
 		PipelineBuilder builder(device);
 		// 启用深度测试和写入，仅当前像素深度值“小于或等于”深度缓冲区中已存值时，通过测试
 		builder.setDepthStencilState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
-		builder.addShaderStage(vkUtils::GetVulkanRenderer()->loadShader(vkUtils::GetVulkanRenderer()->getShadersPath() + "Light_direct.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
+		builder.addShaderStage(VulkanContext::GetVulkanRenderer()->loadShader(VulkanContext::GetVulkanRenderer()->getShadersPath() + "Light_direct.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
 		builder.colorBlendState.attachmentCount = 0;
 		builder.rasterizationState.cullMode = VK_CULL_MODE_NONE;
 		builder.rasterizationState.depthBiasEnable = VK_TRUE;
 		builder.dynamicStateEnables.push_back(VK_DYNAMIC_STATE_DEPTH_BIAS); //向动态状态添加深度偏移，这样我们就能在运行时对其进行更改
 		builder.dynamicState = vks::initializers::pipelineDynamicStateCreateInfo(builder.dynamicStateEnables);
-		builder.buildPipeline(renderPass.renderPass, vkUtils::GetVulkanRenderer()->pipelineCache, pipelineLayout, pipeline);
-		vkUtils::setObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipeline, "DirectLightShadowMapGenerate pipeline");
+		builder.buildPipeline(renderPass.renderPass, VulkanContext::GetVulkanRenderer()->pipelineCache, pipelineLayout, pipeline);
+		VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)pipeline, "DirectLightShadowMapGenerate pipeline");
 	}
 
 	void VulkanDirectLights::Render(VkCommandBuffer cmdBuffer)
 	{
 		if (lightData.directLight.isRnder == 0)
 			return;
-		vkUtils::cmdBeginLabel(cmdBuffer, "DirectLightShadow", { 1.0f, 1.0f, 1.0f });
+		VulkanDebugUtils::CmdBeginLabel(cmdBuffer, "DirectLightShadow", { 1.0f, 1.0f, 1.0f });
 
 		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 
@@ -708,7 +711,7 @@ namespace vkLight {
 				renderPassBeginInfo.framebuffer = cascades[j].frameBuffer;
 				vkCmdBeginRenderPass(cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-				for (auto& [key, model] : vkUtils::GetVulkanRenderer()->models)
+				for (auto& [key, model] : MeshManager::Get().models)
 				{
 					model.drawWithPushConstant(cmdBuffer, VK_SHADER_STAGE_VERTEX_BIT, pipelineLayout, cascades[j].viewProjMatrix);
 				}
@@ -716,7 +719,7 @@ namespace vkLight {
 				vkCmdEndRenderPass(cmdBuffer);
 			}
 		}
-		vkUtils::cmdEndLabel(cmdBuffer);
+		VulkanDebugUtils::CmdEndLabel(cmdBuffer);
 
 		/*
 			Note: 与后续的渲染通道之间不需要显式同步，因为其同步规则已经通过子通道依赖关系隐式完成

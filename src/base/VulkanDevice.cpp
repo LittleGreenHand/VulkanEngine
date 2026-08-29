@@ -15,6 +15,8 @@
 #include <base/VulkanDevice.h>
 #include <unordered_set>
 #include "base/VulkanTexture.h"
+#include "Render/VulkanContext.h"
+#include "Render/VulkanDebugUtils.h"
 
 namespace vks
 {	
@@ -361,6 +363,9 @@ namespace vks
 		// Attach the memory to the buffer object
 		VK_CHECK_RESULT(vkBindBufferMemory(logicalDevice, *buffer, *memory, 0));
 
+		static int count = 0;
+		std::string name = "createBuffer" + std::to_string(count++);
+		VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)*buffer, name);
 		return VK_SUCCESS;
 	}
 

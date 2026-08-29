@@ -42,6 +42,7 @@ bool GlfwWindow::Init(const CreateInfo& createInfo)
 
 	glfwSetWindowUserPointer(m_window, this);
 	glfwSetFramebufferSizeCallback(m_window, FramebufferResizeCallback);
+	glfwSetKeyCallback(m_window, GlfwWindow::KeyCallback);
 
 	// 在高 DPI 屏幕上，framebuffer size 可能和 window size 不一样。
 	int framebufferWidth = 0;
@@ -82,6 +83,14 @@ bool GlfwWindow::ShouldClose() const
 {
 	return m_window == nullptr ||
 		glfwWindowShouldClose(m_window) == GLFW_TRUE;
+}
+
+void GlfwWindow::KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+	{
+		glfwSetWindowShouldClose(window, GLFW_TRUE);
+	}
 }
 
 float GlfwWindow::GetAspectRatio() const

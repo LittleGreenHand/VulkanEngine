@@ -1,6 +1,8 @@
 #pragma once
-#include <glm/glm.hpp>
 #include "PostProcessBase.h"
+#include <array>
+#include "Types.hpp"
+
 struct MotionBlurConstants {
 	glm::vec2  screenSize;       // 屏幕分辨率 (width, height)
 	glm::vec2  ndcToPixelScale;  // NDC到像素空间的缩放因子 (screenSize.xy / 2.0)
@@ -14,8 +16,8 @@ public:
 	VkPipeline pipeline{ VK_NULL_HANDLE };
 	VkPipelineLayout pipelineLayout{ VK_NULL_HANDLE };
 	VkDescriptorSetLayout descriptorSetLayout{ VK_NULL_HANDLE };
-	std::array<VkDescriptorSet, maxConcurrentFrames> descriptorSet;
-	std::array<vks::Buffer, maxConcurrentFrames> paramBuffer;
+	std::array<VkDescriptorSet, MaxConcurrentFrames> descriptorSet;
+	std::array<vks::Buffer, MaxConcurrentFrames> paramBuffer;
 	MotionBlurConstants params;
 public:
 	void prepare();
