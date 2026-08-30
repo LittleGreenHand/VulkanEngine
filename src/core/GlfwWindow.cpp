@@ -43,6 +43,9 @@ bool GlfwWindow::Init(const CreateInfo& createInfo)
 	glfwSetWindowUserPointer(m_window, this);
 	glfwSetFramebufferSizeCallback(m_window, FramebufferResizeCallback);
 	glfwSetKeyCallback(m_window, GlfwWindow::KeyCallback);
+	glfwSetMouseButtonCallback(m_window, GlfwWindow::MouseButtonCallback);
+	glfwSetCursorPosCallback(m_window, GlfwWindow::CursorPositionCallback);
+	glfwSetScrollCallback(m_window, GlfwWindow::ScrollCallback);
 
 	// 在高 DPI 屏幕上，framebuffer size 可能和 window size 不一样。
 	int framebufferWidth = 0;
@@ -50,14 +53,16 @@ bool GlfwWindow::Init(const CreateInfo& createInfo)
 
 	glfwGetFramebufferSize(m_window, &framebufferWidth, &framebufferHeight);
 
-	m_width = static_cast<uint32_t>(framebufferWidth);
-	m_height = static_cast<uint32_t>(framebufferHeight);
+	m_width = framebufferWidth > 0 ? static_cast<uint32_t>(framebufferWidth) : 0;
+	m_height = framebufferHeight > 0 ? static_cast<uint32_t>(framebufferHeight) : 0;
 
 	return true;
 }
 
 void GlfwWindow::Shutdown()
 {
+	m_inputListener.ClearCallbacks();
+
 	if (m_window)
 	{
 		glfwDestroyWindow(m_window);
@@ -85,12 +90,47 @@ bool GlfwWindow::ShouldClose() const
 		glfwWindowShouldClose(m_window) == GLFW_TRUE;
 }
 
+void GlfwWindow::SetInputCallbacks(WindowInputListener::Callbacks callbacks)
+{
+	m_inputListener.SetCallbacks(std::move(callbacks));
+}
+
 void GlfwWindow::KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
 	{
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 	}
+
+	auto* self = static_cast<GlfwWindow*>(glfwGetWindowUserPointer(window));
+	if (self)
+		self->m_inputListener.NotifyKey({ key, scancode, action, mods });
+}
+
+void GlfwWindow::MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
+{
+	auto* self = static_cast<GlfwWindow*>(glfwGetWindowUserPointer(window));
+	if (!self)
+		return;
+
+	double cursorX = 0.0;
+	double cursorY = 0.0;
+	glfwGetCursorPos(window, &cursorX, &cursorY);
+	self->m_inputListener.NotifyMouseButton({ button, action, mods, cursorX, cursorY });
+}
+
+void GlfwWindow::CursorPositionCallback(GLFWwindow* window, double x, double y)
+{
+	auto* self = static_cast<GlfwWindow*>(glfwGetWindowUserPointer(window));
+	if (self)
+		self->m_inputListener.NotifyCursorPosition({ x, y });
+}
+
+void GlfwWindow::ScrollCallback(GLFWwindow* window, double xOffset, double yOffset)
+{
+	auto* self = static_cast<GlfwWindow*>(glfwGetWindowUserPointer(window));
+	if (self)
+		self->m_inputListener.NotifyScroll({ xOffset, yOffset });
 }
 
 float GlfwWindow::GetAspectRatio() const
@@ -135,6 +175,7 @@ void GlfwWindow::FramebufferResizeCallback(	GLFWwindow* window, int width, int h
 	if (!self)
 		return;
 
-	self->m_width = static_cast<uint32_t>(width);
-	self->m_height = static_cast<uint32_t>(height);
+	self->m_width = width > 0 ? static_cast<uint32_t>(width) : 0;
+	self->m_height = height > 0 ? static_cast<uint32_t>(height) : 0;
+	self->m_inputListener.NotifyFramebufferResize({ width, height });
 }

@@ -6,6 +6,7 @@
 #define GLFW_INCLUDE_NONE
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
+#include "WindowInputListener.h"
 
 
 class GlfwWindow
@@ -33,7 +34,11 @@ public:
 	void PollEvents() const;
 	void WaitEvents() const;
 	bool ShouldClose() const;
+	void SetInputCallbacks(WindowInputListener::Callbacks callbacks);
 	static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+	static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
+	static void CursorPositionCallback(GLFWwindow* window, double x, double y);
+	static void ScrollCallback(GLFWwindow* window, double xOffset, double yOffset);
 
 public:
 	uint32_t GetWidth() const { return m_width; }
@@ -53,6 +58,7 @@ private:
 
 private:
 	GLFWwindow* m_window = nullptr;
+	WindowInputListener m_inputListener;
 
 	uint32_t m_width = 0;
 	uint32_t m_height = 0;

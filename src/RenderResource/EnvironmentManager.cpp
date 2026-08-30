@@ -191,7 +191,7 @@ void EnvironmentManager::GenerateBRDFLUT(vks::Texture2D& lutBrdf)
 	pipelineCI.stageCount = 2;
 	pipelineCI.pStages = shaderStages.data();
 	pipelineCI.pVertexInputState = &emptyInputState;
-
+	
 	// Look-up-table (from BRDF) pipeline
 	shaderStages[0] = vulkanRenderer->loadShader(vulkanRenderer->getShadersPath() + "PBR_genbrdflut.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
 	shaderStages[1] = vulkanRenderer->loadShader(vulkanRenderer->getShadersPath() + "PBR_genbrdflut.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);

@@ -5,6 +5,17 @@ VulkanRenderer* vulkanRenderer = nullptr;
 bool init = false;
 namespace VulkanContext
 {
+	void Init(VulkanRenderer* renderer)
+	{
+		vulkanRenderer = renderer;
+		init = true;
+	}
+
+	void CleanUp()
+	{
+		vulkanRenderer = nullptr;
+		init = false;
+	}
 
 	VulkanRenderer* GetVulkanRenderer()
 	{
@@ -84,22 +95,5 @@ namespace VulkanContext
 	int GetRenderHeight()
 	{
 		return vulkanRenderer->height;
-	}
-
-	void DrawImGui()
-	{
-		vulkanRenderer->DrawImGui();
-	}
-
-	void Init(VulkanRenderer* Engine)
-	{
-		vulkanRenderer = Engine;
-		init = true;
-	}
-
-	void CleanUp()
-	{
-		vulkanRenderer = nullptr;
-		init = false;
 	}
 }

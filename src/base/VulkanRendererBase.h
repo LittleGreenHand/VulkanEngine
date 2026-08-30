@@ -51,11 +51,9 @@
 class VulkanRendererBase
 {
 private:
-	std::string getWindowTitle() const;
 	uint32_t destWidth{};
 	uint32_t destHeight{};
-	bool resizing = false;
-	void handleMouseMove(int32_t x, int32_t y);
+	bool resizePending = false;
 	void nextFrame();
 	void updateOverlay();
 	void createPipelineCache();
@@ -205,17 +203,10 @@ public:
 #if defined(_WIN32)
 	void setupConsole(std::string title);
 	void setupDPIAwareness();
-	HWND setupWindow(HINSTANCE hinstance, WNDPROC wndproc);
-	void handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+	//HWND setupWindow(HINSTANCE hinstance, WNDPROC wndproc);
 #endif
 	/** @brief (Virtual) Creates the application wide Vulkan instance */
 	virtual VkResult createInstance();
-	/** @brief (Virtual) Called after a key was pressed, can be used to do custom key handling */
-	virtual void keyPressed(uint32_t);
-	/** @brief (Virtual) Called after the mouse cursor moved and before internal events (like camera rotation) is handled */
-	virtual void mouseMoved(double x, double y, bool &handled);
-	/** @brief (Virtual) Called when the window has been resized, can be used by the sample application to recreate resources */
-	virtual void windowResized();
 	/** @brief (Virtual) 创建延迟渲染所需的GBuffer */
 	virtual void setupGBuffer();
 	/** @brief (Virtual) 创建离屏渲染目标 */

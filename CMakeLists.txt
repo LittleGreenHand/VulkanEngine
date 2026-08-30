@@ -3,6 +3,8 @@ set(PROJECT_NAME VulkanLab CACHE STRING "解决方案与项目名称")
 
 project(${PROJECT_NAME})
 
+option(VULKANLAB_BUILD_TESTS "Build VulkanLab unit tests" OFF)
+
 include_directories(thirdParty)
 include_directories(thirdParty/glm)
 include_directories(thirdParty/gli)
@@ -40,6 +42,11 @@ set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL        OFF CACHE BOOL "" FORCE)
 add_subdirectory(thirdParty/glfw-3.5.1)
+
+if(VULKANLAB_BUILD_TESTS)
+	enable_testing()
+	add_subdirectory(tests)
+endif()
 
 
 set_target_properties(glfw PROPERTIES FOLDER "ThirdpartyLib")

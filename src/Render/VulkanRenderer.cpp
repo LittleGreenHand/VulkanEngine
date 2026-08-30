@@ -61,6 +61,7 @@ VulkanRenderer::~VulkanRenderer()
 void VulkanRenderer::Init(VkSurfaceKHR surface)
 {
 	VulkanContext::Init(this);
+	VulkanDebugUtils::InitDebugUtils(instance, device);
 	VulkanRendererBase::InitSurfaceKHR(surface);
 	VulkanRendererBase::prepare();
 

@@ -200,7 +200,7 @@ public:
         updateViewMatrix();
     };
 
-    void translate(glm::vec3 delta)
+    void Translate(glm::vec3 delta)
     {
         this->position += delta;
         updateViewMatrix();
@@ -215,21 +215,25 @@ public:
     {
         this->movementSpeed = movementSpeed;
     }
-
+    
+    glm::vec3 GetFront()
+    {
+        return camFront;
+    }
     void update(float deltaTime)
     {
+		camFront.x = -cos(glm::radians(rotation.x * (flipY ? -1.0f : 1.0f))) * sin(glm::radians(rotation.y));
+		camFront.y = sin(glm::radians(rotation.x * (flipY ? -1.0f : 1.0f)));
+		camFront.z = cos(glm::radians(rotation.x * (flipY ? -1.0f : 1.0f))) * cos(glm::radians(rotation.y));
+		camFront = glm::normalize(camFront);
+		camRight = glm::normalize(glm::cross(camFront, glm::vec3(0.0f, 1.0f, 0.0f)));
+		camUp = glm::normalize(glm::cross(camFront, camRight));
+
         updated = false;
         if (type == CameraType::firstperson)
         {
             if (moving())
             {
-                camFront.x = -cos(glm::radians(rotation.x * (flipY ? -1.0f : 1.0f))) * sin(glm::radians(rotation.y));
-                camFront.y = sin(glm::radians(rotation.x * (flipY ? -1.0f : 1.0f)));
-                camFront.z = cos(glm::radians(rotation.x * (flipY ? -1.0f : 1.0f))) * cos(glm::radians(rotation.y));
-                camFront = glm::normalize(camFront);
-                camRight = glm::normalize(glm::cross(camFront, glm::vec3(0.0f, 1.0f, 0.0f)));
-                camUp = glm::normalize(glm::cross(camFront, camRight));
-
                 float moveSpeed = deltaTime * movementSpeed;
                 if (keys.up)
                     position -= camFront * moveSpeed;

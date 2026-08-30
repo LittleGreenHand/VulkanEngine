@@ -1,8 +1,8 @@
 #pragma once
-
-class VulkanRenderer;
-class GlfwWindow;
-class ImGuiLayer;
+#include <memory>
+#include "Render/VulkanRenderer.h"
+#include "GlfwWindow.h"
+#include "ImGuiLayer.h"
 class Application
 {
 public:
@@ -23,16 +23,20 @@ public:
 	void Destroy();
 	void Resize(int width, int height);
 	bool Run();
-	void BeginFrame();
+	bool BeginFrame();
 	void UpdateScene();
 	void Simulate();
 	void Render();
 	void EndFrame();
-private:
-	
 
+	void OnKey(int key, int scancode, int action, int mods);
+	void OnMouseButton(int button, int action, int mods, double cursorX, double cursorY);
+	void OnMouseMove(double x, double y);
+	void OnScroll(double xOffset, double yOffset);
+	void OnFramebufferResize(int framebufferWidth, int framebufferHeight);
+private:
 	static bool init;
-	VulkanRenderer* renderer = nullptr;
-	GlfwWindow* window = nullptr;
-	ImGuiLayer* guiLayer = nullptr;
+	std::unique_ptr<VulkanRenderer> renderer;
+	std::unique_ptr<GlfwWindow> window;
+	std::unique_ptr<ImGuiLayer> guiLayer;
 };

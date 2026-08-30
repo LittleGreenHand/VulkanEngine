@@ -6,7 +6,7 @@
 class VulkanRenderer;
 namespace VulkanContext
 {
-	void Init(VulkanRenderer* Engine);
+	void Init(VulkanRenderer* renderer);
 	void CleanUp();
 
 	VulkanRenderer* GetVulkanRenderer();
@@ -25,6 +25,4 @@ namespace VulkanContext
 	VkCommandBuffer GetCurrentCommandBuffer();
 	int GetRenderWidth();
 	int GetRenderHeight();
-	void DrawImGui();
-
 };
