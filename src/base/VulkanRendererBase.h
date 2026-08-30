@@ -1,13 +1,5 @@
 #pragma once
 
-#ifdef _WIN32
-//#pragma comment(linker, "/subsystem:windows")
-#include <windows.h>
-#include <fcntl.h>
-#include <io.h>
-#include <ShellScalingAPI.h>
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,7 +27,6 @@
 #include "vulkan/vulkan.h"
 
 #include "base/CommandLineParser.hpp"
-#include "base/keycodes.hpp"
 #include "base/VulkanTools.h"
 #include "base/VulkanSwapChain.h"
 #include "base/VulkanBuffer.h"
@@ -186,12 +177,6 @@ public:
 	vks::Texture depthStencil{};
 	GBuffer gBuffer;
 
-	// OS specific
-#if defined(_WIN32)
-	HWND window;
-	HINSTANCE windowInstance;
-#endif
-
 	/** @brief Default base class constructor */
 	VulkanRendererBase();
 	virtual ~VulkanRendererBase();
@@ -200,11 +185,6 @@ public:
 	// Returns the path to the root of the glsl, hlsl or slang shader directory.
 	std::string getShadersPath() const;
 
-#if defined(_WIN32)
-	void setupConsole(std::string title);
-	void setupDPIAwareness();
-	//HWND setupWindow(HINSTANCE hinstance, WNDPROC wndproc);
-#endif
 	/** @brief (Virtual) Creates the application wide Vulkan instance */
 	virtual VkResult createInstance();
 	/** @brief (Virtual) 创建延迟渲染所需的GBuffer */

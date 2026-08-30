@@ -248,12 +248,12 @@ VulkanRendererBase::VulkanRendererBase()
 	commandLineParser.add("resourcepath", { "-rp", "--resourcepath" }, 1, "Set path for dir where assets folder is present");
 	commandLineParser.add("shadersspvpath", { "-ssp", "--shadersspvpath" }, 1, "Set path for dir where shaders folder is present");
 	commandLineParser.parse(args);
-	if (commandLineParser.isSet("help")) {
-		setupConsole("VulkanRenderer");
-		commandLineParser.printHelp();
-		std::cin.get();
-		exit(0);
-	}
+	//if (commandLineParser.isSet("help")) {
+	//	setupConsole("VulkanRenderer");
+	//	commandLineParser.printHelp();
+	//	std::cin.get();
+	//	exit(0);
+	//}
 	if (commandLineParser.isSet("validation")) {
 		settings.validation = true;
 	}
@@ -318,15 +318,6 @@ VulkanRendererBase::VulkanRendererBase()
 	// Validation for all samples can be forced at compile time using the FORCE_VALIDATION define
 #if defined(FORCE_VALIDATION)
 	settings.validation = true;
-#endif
-
-#if defined(_WIN32)
-	// Enable console if validation is active, debug message callback will output to it
-	if (this->settings.validation)
-	{
-		setupConsole("VulkanRenderer");
-	}
-	setupDPIAwareness();
 #endif
 }
 
@@ -484,45 +475,6 @@ bool VulkanRendererBase::InitVulkan()
 
 	return true;
 }
-
-#if defined(_WIN32)
-// Win32 : Sets up a console window and redirects standard output to it
-void VulkanRendererBase::setupConsole(std::string title)
-{
-	AllocConsole();
-	AttachConsole(GetCurrentProcessId());
-	FILE *stream;
-	freopen_s(&stream, "CONIN$", "r", stdin);
-	freopen_s(&stream, "CONOUT$", "w+", stdout);
-	freopen_s(&stream, "CONOUT$", "w+", stderr);
-	// Enable flags so we can color the output
-	HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-	DWORD dwMode = 0;
-	GetConsoleMode(consoleHandle, &dwMode);
-	dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-	SetConsoleMode(consoleHandle, dwMode);
-	SetConsoleTitle(TEXT(title.c_str()));
-}
-
-void VulkanRendererBase::setupDPIAwareness()
-{
-	typedef HRESULT *(__stdcall *SetProcessDpiAwarenessFunc)(PROCESS_DPI_AWARENESS);
-
-	HMODULE shCore = LoadLibraryA("Shcore.dll");
-	if (shCore)
-	{
-		SetProcessDpiAwarenessFunc setProcessDpiAwareness =
-			(SetProcessDpiAwarenessFunc)GetProcAddress(shCore, "SetProcessDpiAwareness");
-
-		if (setProcessDpiAwareness != nullptr)
-		{
-			setProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
-		}
-
-		FreeLibrary(shCore);
-	}
-}
-#endif
 
 void VulkanRendererBase::createSynchronizationPrimitives()
 {

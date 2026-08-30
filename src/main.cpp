@@ -1,9 +1,9 @@
 #include "base/VulkanRendererBase.h"
 #include "core/Application.h"
 
-int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance, _In_ LPSTR, _In_ int)
+int main(int argc, char** argv)
 {
-	for (size_t i = 0; i < __argc; i++) { VulkanRendererBase::args.push_back(__argv[i]); };
+	for (size_t i = 0; i < argc; i++) { VulkanRendererBase::args.push_back(argv[i]); };
 	VulkanRendererBase::args.push_back("--validation");
 	VulkanRendererBase::args.push_back("--vsync");
 	VulkanRendererBase::args.push_back("--shaders");
