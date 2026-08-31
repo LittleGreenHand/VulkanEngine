@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10.0)
+cmake_minimum_required(VERSION 3.20.0)
 set(PROJECT_NAME VulkanLab CACHE STRING "解决方案与项目名称")
 
 project(${PROJECT_NAME})

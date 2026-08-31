@@ -1,5 +1,6 @@
 #include "Application.h"
 #include "FrameClock.h"
+#include <thread>
 bool Application::init = false;
 bool Application::Init()
 {
@@ -77,7 +78,10 @@ bool Application::Run()
 	while (!window->ShouldClose())
 	{
 		if (!BeginFrame())
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			continue;
+		}
 		UpdateScene();
 		Simulate();
 		Render();
@@ -89,17 +93,33 @@ bool Application::Run()
 bool Application::BeginFrame()
 {
 	window->PollEvents();
+
+	// 后缓冲延迟Resize，避免连续reszie
+	{
+		if (m_needResize)
+		{
+			static auto ResizeDelay = std::chrono::milliseconds(150);
+			auto now = std::chrono::steady_clock::now();
+			auto time = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastResizeTime);
+			if (time > ResizeDelay)
+			{
+				renderer->OnFramebufferResize(window->GetFramebufferWidth(), window->GetFramebufferHeight());
+				m_needResize = false;
+			}
+			else
+				return false;
+		}
+	}
+
 	if (window->ShouldClose())
 		return false;
 
-	if (window->IsMinimized())
+	FrameClock::Get().Tick();
+	if (!renderer->BeginFrame(FrameClock::Get().DeltaSeconds()))
 	{
-		window->WaitEvents();
+		std::cout << "BeginFrame false" << std::endl;
 		return false;
 	}
-
-	FrameClock::GetInstance().Tick();
-	renderer->BeginFrame(FrameClock::GetInstance().DeltaSeconds());
 	guiLayer->BeginFrame();
 	return true;
 }
@@ -250,6 +270,7 @@ void Application::OnScroll(double xOffset, double yOffset)
 
 void Application::OnFramebufferResize(int framebufferWidth, int framebufferHeight)
 {
-	//renderer->OnFramebufferResize(framebufferWidth, framebufferHeight);
+	lastResizeTime = std::chrono::steady_clock::now();
+	m_needResize = true;
 }
 

@@ -14,7 +14,7 @@ public:
 
 	static void preparePostProcessBase(vks::VulkanDevice* vulkandevice);
 	static void cleanUp();
-	static void update(uint32_t Width, uint32_t Height);
+	static void UpdateResolution(uint32_t Width, uint32_t Height);
 
 };
 
@@ -26,6 +26,6 @@ public:
 	PostProcessToneMapping* toneMappingProcess = nullptr;
 	PostProcessDOF* dofProcess = nullptr;
 public:
-	void prepare();
+	void Init();
 	void destroyALL();
 };

@@ -53,8 +53,8 @@ bool GlfwWindow::Init(const CreateInfo& createInfo)
 
 	glfwGetFramebufferSize(m_window, &framebufferWidth, &framebufferHeight);
 
-	m_width = framebufferWidth > 0 ? static_cast<uint32_t>(framebufferWidth) : 0;
-	m_height = framebufferHeight > 0 ? static_cast<uint32_t>(framebufferHeight) : 0;
+	m_framebufferWidth = framebufferWidth > 0 ? static_cast<uint32_t>(framebufferWidth) : 0;
+	m_framebufferHeight = framebufferHeight > 0 ? static_cast<uint32_t>(framebufferHeight) : 0;
 
 	return true;
 }
@@ -70,8 +70,8 @@ void GlfwWindow::Shutdown()
 	}
 	glfwTerminate();
 
-	m_width = 0;
-	m_height = 0;
+	m_framebufferWidth = 0;
+	m_framebufferHeight = 0;
 }
 
 void GlfwWindow::PollEvents() const
@@ -135,10 +135,10 @@ void GlfwWindow::ScrollCallback(GLFWwindow* window, double xOffset, double yOffs
 
 float GlfwWindow::GetAspectRatio() const
 {
-	if (m_height == 0)
+	if (m_framebufferHeight == 0)
 		return 0.0f;
 
-	return static_cast<float>(m_width) / static_cast<float>(m_height);
+	return static_cast<float>(m_framebufferWidth) / static_cast<float>(m_framebufferHeight);
 }
 
 VkSurfaceKHR GlfwWindow::CreateSurface(VkInstance instance) const
@@ -175,7 +175,7 @@ void GlfwWindow::FramebufferResizeCallback(	GLFWwindow* window, int width, int h
 	if (!self)
 		return;
 
-	self->m_width = width > 0 ? static_cast<uint32_t>(width) : 0;
-	self->m_height = height > 0 ? static_cast<uint32_t>(height) : 0;
+	self->m_framebufferWidth = width > 0 ? static_cast<uint32_t>(width) : 0;
+	self->m_framebufferHeight = height > 0 ? static_cast<uint32_t>(height) : 0;
 	self->m_inputListener.NotifyFramebufferResize({ width, height });
 }

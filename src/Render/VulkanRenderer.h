@@ -77,15 +77,16 @@ public:
 	void AddEnabledDeviceExtensions(int extensionCount, const char** extensions);
 	virtual void getEnabledExtensions() override;
 	void buildCommandBuffer();
-	void UpdateDebugInfo();
 	void prepareDescriptors();
 	void preparePipelines();
 	void prepareUniformBuffers();
-	void preparePostProcess();
+	void InitPostProcess();
 	void updateUniformBuffers();
+	void UpdateDescriptorSets();
 	void render();
-	void BeginFrame(double deltaTime);
+	bool BeginFrame(double deltaTime);
 	void EndFrame();
 	void DrawImGui();
+	void OnFramebufferResize(int framebufferWidth, int framebufferHeight);
 };
 

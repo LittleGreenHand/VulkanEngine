@@ -41,13 +41,11 @@ public:
 	static void ScrollCallback(GLFWwindow* window, double xOffset, double yOffset);
 
 public:
-	uint32_t GetWidth() const { return m_width; }
-	uint32_t GetHeight() const { return m_height; }
-	float GetAspectRatio() const;
-	bool IsMinimized() const { return m_width == 0 || m_height == 0; }
-
-public:
 	GLFWwindow* GetNativeWindow() const { return m_window; }
+	uint32_t GetFramebufferWidth() const { return m_framebufferWidth; }
+	uint32_t GetFramebufferHeight() const { return m_framebufferHeight; }
+	float GetAspectRatio() const;
+	bool IsMinimized() const { return m_framebufferWidth == 0 || m_framebufferHeight == 0; }
 
 public:
 	VkSurfaceKHR CreateSurface(VkInstance instance) const;
@@ -60,6 +58,6 @@ private:
 	GLFWwindow* m_window = nullptr;
 	WindowInputListener m_inputListener;
 
-	uint32_t m_width = 0;
-	uint32_t m_height = 0;
+	uint32_t m_framebufferWidth = 0;
+	uint32_t m_framebufferHeight = 0;
 };

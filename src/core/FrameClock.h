@@ -3,7 +3,7 @@
 class FrameClock 
 {
 public:
-	static FrameClock& GetInstance()
+	static FrameClock& Get()
 	{
 		static FrameClock instance;
 		return instance;
@@ -16,8 +16,8 @@ public:
 public:
 	// 每一帧调用一次，并返回距离上一次更新的时间差（秒）
 	double Tick();
-	double DeltaSeconds() const { return delta; }
-	double FPS() const { return smoothedFps; }
+	double DeltaSeconds() { return delta; }
+	double FPS() { return smoothedFps; }
 
 private:
 	FrameClock() = default;

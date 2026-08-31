@@ -89,11 +89,11 @@ namespace VulkanContext
 
 	int GetRenderWidth()
 	{
-		return vulkanRenderer->width;
+		return vulkanRenderer->m_renderWidth;
 	}
 
 	int GetRenderHeight()
 	{
-		return vulkanRenderer->height;
+		return vulkanRenderer->m_renderHeiht;
 	}
 }

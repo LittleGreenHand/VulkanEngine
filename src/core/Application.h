@@ -36,6 +36,8 @@ public:
 	void OnFramebufferResize(int framebufferWidth, int framebufferHeight);
 private:
 	static bool init;
+	bool m_needResize = false; // 窗口是否处于Resize状态
+	std::chrono::steady_clock::time_point lastResizeTime;//记录最后一次调用OnFramebufferResize的时间
 	std::unique_ptr<VulkanRenderer> renderer;
 	std::unique_ptr<GlfwWindow> window;
 	std::unique_ptr<ImGuiLayer> guiLayer;

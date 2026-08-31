@@ -17,7 +17,7 @@ VulkanRenderer::VulkanRenderer() : VulkanRendererBase()
 	title = "VulkanEngine";
 	camera.type = Camera::CameraType::firstperson;
 	camera.movementSpeed = 0.5f;
-	camera.setPerspective(60.0f, (float)width / (float)height, 0.01f, 256.0f);
+	camera.setPerspective(60.0f, (float)m_renderWidth / (float)m_renderHeiht, 0.01f, 256.0f);
 
 	camera.rotationSpeed = 0.15f;
 	camera.setRotation({ 0.0f, 0.0f, 0.0f });
@@ -63,7 +63,7 @@ void VulkanRenderer::Init(VkSurfaceKHR surface)
 	VulkanContext::Init(this);
 	VulkanDebugUtils::InitDebugUtils(instance, device);
 	VulkanRendererBase::InitSurfaceKHR(surface);
-	VulkanRendererBase::prepare();
+	VulkanRendererBase::InitRenderResource();
 
 	//加载渲染资源
 	{
@@ -87,9 +87,8 @@ void VulkanRenderer::Init(VkSurfaceKHR surface)
 		pointLights.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(false));
 		directLight.prepare(vulkanDevice, vulkanDevice->getSupportedDepthFormat(true));
 	}
-	preparePostProcess();
-	UpdateDebugInfo();
-	init = true;
+	InitPostProcess();
+	m_init = true;
 }
 
 void VulkanRenderer::getEnabledFeatures()
@@ -137,16 +136,6 @@ void VulkanRenderer::getEnabledExtensions()
 	deviceCreatepNextChain = &libraryFeatures;
 }
 
-void VulkanRenderer::UpdateDebugInfo()
-{
-	VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)offscreenTexture[0].image, "offscreenTexture0");
-	VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)offscreenTexture[1].image, "offscreenTexture1");
-	for (int i = 0; i < swapChain.swapChainImages.size(); i++)
-		VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)swapChain.swapChainImages[i].image, ("swapchainImage" + std::to_string(i)));
-	for (int i = 0; i < GBufferCount; i++)
-		VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)gBuffer.texture[i].image, GBufferNames[i]);
-}
-
 void VulkanRenderer::prepareDescriptors()
 {
 	// 创建DescriptorPool
@@ -192,15 +181,7 @@ void VulkanRenderer::prepareDescriptors()
 			// 分配描述符集
 			VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &setLayouts[LBI_GLOBAL], 1);
 			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &globalDescriptorSets[i]));
-			VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)globalDescriptorSets[i], "frameDescriptorSets[" + std::to_string(i) + "].globalParamDescriptorSet ");
-
-			// 更新描述符集
-			std::vector<VkWriteDescriptorSet> writeDescriptorSets = {vks::initializers::writeDescriptorSet(globalDescriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &globalParamBuffers[i].globalParamBuffer.descriptor)};
-			for (int id = 0; id < GBufferCount; id++)
-			{
-				writeDescriptorSets.push_back(vks::initializers::writeDescriptorSet(globalDescriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 + id, &gBuffer.texture[id].descriptor));
-			}
-			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
+			VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)globalDescriptorSets[i], "frameDescriptorSets[" + std::to_string(i) + "].globalParamDescriptorSet ");			
 		}
 
 		//灯光
@@ -210,21 +191,12 @@ void VulkanRenderer::prepareDescriptors()
 
 		//IBL贴图
 		{
-			// 分配描述符集
 			VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &setLayouts[LBI_IBL], 1);
 			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &IBLDescriptorSet));
-			VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)IBLDescriptorSet, "IBLDescriptorSet ");
-
-			// 更新描述符集
-			std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
-				vks::initializers::writeDescriptorSet(IBLDescriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &EnvironmentManager::Get().IBL.irradianceCube.descriptor),
-				vks::initializers::writeDescriptorSet(IBLDescriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &EnvironmentManager::Get().IBL.prefilteredCube.descriptor),
-				vks::initializers::writeDescriptorSet(IBLDescriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2, &EnvironmentManager::Get().IBL.lutBrdf.descriptor),
-				vks::initializers::writeDescriptorSet(IBLDescriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3, &EnvironmentManager::Get().IBL.environmentCube.descriptor)
-			};
-			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
+			VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)IBLDescriptorSet, "IBLDescriptorSet ");			
 		}
 	}
+	UpdateDescriptorSets();
 	setLayouts[LBI_LIGHTS] = vkLight::descriptorSetLayout;
 	setLayouts[LBI_MATERIALS] = vkglTF::MaterialDescriptorSetLayout;
 	setLayouts[LBI_MESH] = vkglTF::MeshDescriptorSetLayout;
@@ -389,7 +361,6 @@ void VulkanRenderer::updateUniformBuffers()
 	globalParam.farPlane = camera.zfar;	
 	memcpy(globalParamBuffers[currentBuffer].globalParamBuffer.mapped, &globalParam, sizeof(GlobalParams));
 
-	PostProcessBase::update(width, height);
 	postProcessManager->dofProcess->setDOFParams(camera.znear, camera.zfar, camera.focusDistance, camera.focusRange, camera.maxBlurRadius, camera.aperture);
 	//models[M_Cerberus].nodes[0]->scale = (glm::vec3(0.2f * (timer + 1)));
 	//models[M_Cerberus].nodes[0]->rotation = VulkanUtils::eularToQuaternion(glm::vec3(-90, 90, (timer + 1) * 360.0));
@@ -397,13 +368,40 @@ void VulkanRenderer::updateUniformBuffers()
 	
 }
 
-void VulkanRenderer::preparePostProcess() 
+void VulkanRenderer::UpdateDescriptorSets()
+{
+	// 全局参数
+	{
+		for (auto i = 0; i < globalDescriptorSets.size(); i++)
+		{
+			std::vector<VkWriteDescriptorSet> writeDescriptorSets = { vks::initializers::writeDescriptorSet(globalDescriptorSets[i], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &globalParamBuffers[i].globalParamBuffer.descriptor) };
+			for (int id = 0; id < GBufferCount; id++)
+			{
+				writeDescriptorSets.push_back(vks::initializers::writeDescriptorSet(globalDescriptorSets[i], VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 + id, &gBuffer.texture[id].descriptor));
+			}
+			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
+		}
+	}
+	// IBL
+	{
+		// 更新描述符集
+		std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
+			vks::initializers::writeDescriptorSet(IBLDescriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &EnvironmentManager::Get().IBL.irradianceCube.descriptor),
+			vks::initializers::writeDescriptorSet(IBLDescriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &EnvironmentManager::Get().IBL.prefilteredCube.descriptor),
+			vks::initializers::writeDescriptorSet(IBLDescriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2, &EnvironmentManager::Get().IBL.lutBrdf.descriptor),
+			vks::initializers::writeDescriptorSet(IBLDescriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3, &EnvironmentManager::Get().IBL.environmentCube.descriptor)
+		};
+		vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
+	}
+}
+
+void VulkanRenderer::InitPostProcess() 
 {
 	PostProcessBase::preparePostProcessBase(vulkanDevice);
 	if (!postProcessManager)
 	{
 		postProcessManager = new PostProcessManager();
-		postProcessManager->prepare();
+		postProcessManager->Init();
 	}
 }
 
@@ -425,8 +423,8 @@ void VulkanRenderer::render()
 		//几何Pass，为不透明和遮罩物体生成GBuffer
 		{
 			VulkanDebugUtils::CmdBeginLabel(cmdBuffer, "PBR_DEFER_GEOMETRY", { 1.0f, 1.0f, 1.0f });
-			const VkViewport viewport = vks::initializers::viewport((float)width, (float)height, 0.0f, 1.0f);
-			const VkRect2D scissor = vks::initializers::rect2D(width, height, 0, 0);
+			const VkViewport viewport = vks::initializers::viewport((float)m_renderWidth, (float)m_renderHeiht, 0.0f, 1.0f);
+			const VkRect2D scissor = vks::initializers::rect2D(m_renderWidth, m_renderHeiht, 0, 0);
 			vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
 			vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
@@ -444,7 +442,7 @@ void VulkanRenderer::render()
 			VkRenderingAttachmentInfo depthAttachment = vks::initializers::RenderingAttachmentInfo_Depth(depthStencil.view);
 			depthAttachment.clearValue.depthStencil = { 1.0f, 0 };
 			VulkanImageUtils::TransitionImageLayout(cmdBuffer, depthStencil, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
-			VkRenderingInfo renderInfo = vks::initializers::RenderingInfo({ width, height }, colorAttachmentCount, colorAttachment, &depthAttachment);
+			VkRenderingInfo renderInfo = vks::initializers::RenderingInfo({ m_renderWidth, m_renderHeiht }, colorAttachmentCount, colorAttachment, &depthAttachment);
 
 			//开始动态渲染
 			vkCmdBeginRendering(cmdBuffer, &renderInfo);
@@ -487,14 +485,14 @@ void VulkanRenderer::render()
 		renderPassBeginInfo.renderPass = mainRenderPass.renderPass;
 		renderPassBeginInfo.renderArea.offset.x = 0;
 		renderPassBeginInfo.renderArea.offset.y = 0;
-		renderPassBeginInfo.renderArea.extent.width = width;
-		renderPassBeginInfo.renderArea.extent.height = height;
+		renderPassBeginInfo.renderArea.extent.width = m_renderWidth;
+		renderPassBeginInfo.renderArea.extent.height = m_renderHeiht;
 		renderPassBeginInfo.clearValueCount = 3;
 		renderPassBeginInfo.pClearValues = clearValues;
 		renderPassBeginInfo.framebuffer = mainRenderPass.frameBuffers[0];
 
-		const VkViewport viewport = vks::initializers::viewport((float)width, (float)height, 0.0f, 1.0f);
-		const VkRect2D scissor = vks::initializers::rect2D(width, height, 0, 0);
+		const VkViewport viewport = vks::initializers::viewport((float)m_renderWidth, (float)m_renderHeiht, 0.0f, 1.0f);
+		const VkRect2D scissor = vks::initializers::rect2D(m_renderWidth, m_renderHeiht, 0, 0);
 		vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
 		vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
@@ -567,8 +565,11 @@ void VulkanRenderer::render()
 
 }
 
-void VulkanRenderer::BeginFrame(double deltaTime)
+bool VulkanRenderer::BeginFrame(double deltaTime)
 {
+	if (VulkanRendererBase::prepareFrame() != VK_SUCCESS)
+		return false;
+
 	frameCounter++;
 	frameTimer = deltaTime;
 	timer += timerSpeed * frameTimer;
@@ -577,12 +578,13 @@ void VulkanRenderer::BeginFrame(double deltaTime)
 		timer -= 1.0f;
 	}
 	camera.update(frameTimer);
-	VulkanRendererBase::prepareFrame();
+	PostProcessBase::UpdateResolution(m_renderWidth, m_renderHeiht);
 	updateUniformBuffers();
 
 	VkCommandBuffer cmdBuffer = drawCmdBuffers[currentBuffer];
 	VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 	VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
+	return true;
 }
 
 void VulkanRenderer::EndFrame()
@@ -599,13 +601,24 @@ void VulkanRenderer::DrawImGui()
 	VulkanDebugUtils::CmdBeginLabel(cmdBuffer, "ImGUI", { 1.0f, 1.0f, 1.0f });
 	VulkanImageUtils::TransitionImageLayout(cmdBuffer, swapChain.swapChainImages[currentImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingAttachmentInfo colorAttachment = vks::initializers::RenderingAttachmentInfo_Color(swapChain.swapChainImages[currentImageIndex].view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	VkRenderingInfo renderInfo = vks::initializers::RenderingInfo({ width, height }, &colorAttachment, nullptr);
+	VkRenderingInfo renderInfo = vks::initializers::RenderingInfo({ m_renderWidth, m_renderHeiht }, &colorAttachment, nullptr);
 	vkCmdBeginRendering(cmdBuffer, &renderInfo);
-	const VkViewport viewport = vks::initializers::viewport((float)width, (float)height, 0.0f, 1.0f);
-	const VkRect2D scissor = vks::initializers::rect2D(width, height, 0, 0);
+	const VkViewport viewport = vks::initializers::viewport((float)m_renderWidth, (float)m_renderHeiht, 0.0f, 1.0f);
+	const VkRect2D scissor = vks::initializers::rect2D(m_renderWidth, m_renderHeiht, 0, 0);
 	vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
 	vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer);
 	vkCmdEndRendering(cmdBuffer);
 	VulkanDebugUtils::CmdEndLabel(cmdBuffer);
+}
+
+void VulkanRenderer::OnFramebufferResize(int framebufferWidth, int framebufferHeight)
+{
+	if (m_framebufferWidth != framebufferWidth || m_framebufferHeiht != framebufferHeight)
+	{
+		m_renderWidth = m_framebufferWidth = framebufferWidth;
+		m_renderHeiht = m_framebufferHeiht = framebufferHeight;
+		windowResize();
+		UpdateDescriptorSets();
+	}
 }

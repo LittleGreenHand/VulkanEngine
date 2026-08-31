@@ -1,5 +1,6 @@
 #include "ImGuiLayer.h"
 
+#include <vector>
 #include <cassert>
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -8,7 +9,7 @@
 #include "Render/VulkanContext.h"
 #include "Render/VulkanRenderer.h"
 #include "RenderResource/MeshManager.h"
-#include <vector>
+#include "core/FrameClock.h"
 
 // 用于跟踪选中的节点
 vkglTF::Node* selectedNode = nullptr;
@@ -254,6 +255,7 @@ void ImGuiLayer::Update()
 	//渲染设置
 	{
 		auto renderer = VulkanContext::GetVulkanRenderer();
+		ImGui::Text("FPS: %.1f  (%.3f ms)", FrameClock::Get().FPS(), FrameClock::Get().DeltaSeconds()*1000);
 		if (ImGui::CollapsingHeader("相机")) {
 			ImGui::Indent();
 			{
@@ -298,7 +300,7 @@ void ImGuiLayer::Update()
 					ImGui::InputFloat("FarPlane", &zfar, 1, 100, "%.1f");
 					if (fov != renderer->camera.fov || znear != renderer->camera.znear || zfar != renderer->camera.zfar)
 					{
-						renderer->camera.setPerspective(fov, (float)renderer->width / (float)renderer->height, znear, zfar);
+						renderer->camera.setPerspective(fov, (float)renderer->m_renderWidth / (float)renderer->m_renderHeiht, znear, zfar);
 						renderer->directLight.updateCascades();
 					}
 				}

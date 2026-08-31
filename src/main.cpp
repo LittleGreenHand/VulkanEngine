@@ -6,8 +6,6 @@ int main(int argc, char** argv)
 	for (size_t i = 0; i < argc; i++) { VulkanRendererBase::args.push_back(argv[i]); };
 	VulkanRendererBase::args.push_back("--validation");
 	VulkanRendererBase::args.push_back("--vsync");
-	VulkanRendererBase::args.push_back("--shaders");
-	VulkanRendererBase::args.push_back("slang");
 	VulkanRendererBase::args.push_back("--width");
 	VulkanRendererBase::args.push_back("2560");
 	VulkanRendererBase::args.push_back("--height");

@@ -38,13 +38,13 @@ void PostProcessBase::cleanUp()
 	device = VK_NULL_HANDLE;
 }
 
-void PostProcessBase::update(uint32_t Width, uint32_t Height)
+void PostProcessBase::UpdateResolution(uint32_t Width, uint32_t Height)
 {
 	width = Width;
 	height = Height;
 }
 
-void PostProcessManager::prepare()
+void PostProcessManager::Init()
 {
 	if (!toneMappingProcess)
 		toneMappingProcess = new PostProcessToneMapping();

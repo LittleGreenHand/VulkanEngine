@@ -42,8 +42,6 @@
 class VulkanRendererBase
 {
 private:
-	uint32_t destWidth{};
-	uint32_t destHeight{};
 	bool resizePending = false;
 	void nextFrame();
 	void updateOverlay();
@@ -53,7 +51,6 @@ private:
 	void createSwapChain();
 	void createCommandBuffers();
 	void destroyCommandBuffers();
-	std::string shaderType = "glsl";
 public:
 	// Frame counter to display fps
 	uint32_t frameCounter = 0;
@@ -113,10 +110,12 @@ public:
 
 	bool requiresStencil{ false };
 public:
-	bool init = false;
-	bool resized = false;
-	uint32_t width = 1280;
-	uint32_t height = 720;
+	bool m_init = false;
+	bool resized = false; // 是否正在resize后缓冲的分辨率
+	uint32_t m_renderWidth = 1280; // 渲染分辨率，渲染时依此分辨率进行渲染
+	uint32_t m_renderHeiht = 720;
+	uint32_t m_framebufferWidth = 1280; //交换链Present的分辨率，也可以说是窗口的显示分辨率
+	uint32_t m_framebufferHeiht = 720;
 
 	CommandLineParser commandLineParser;
 
@@ -203,7 +202,8 @@ public:
 	virtual void getEnabledExtensions();
 
 	void InitSurfaceKHR(VkSurfaceKHR surface);
-	void prepare();
+	//创建基础的渲染资源
+	void InitRenderResource();
 	/** @brief Loads a SPIR-V shader file for the given shader stage */
 	VkPipelineShaderStageCreateInfo loadShader(std::string fileName, VkShaderStageFlagBits stage);
 
@@ -216,7 +216,7 @@ public:
 	//void drawUI(const VkCommandBuffer commandBuffer);
 
 	/** Prepare the next frame for workload submission by acquiring the next swap chain image and waiting for the previous command buffer to finish */
-	void prepareFrame(bool waitForFence = true);
+	VkResult prepareFrame(bool waitForFence = true);
 	/** @brief Presents the current image to the swap chain */
 	void submitFrame(bool skipQueueSubmit = false);
 
