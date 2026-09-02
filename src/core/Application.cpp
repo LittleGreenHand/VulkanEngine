@@ -1,14 +1,17 @@
 #include "Application.h"
 #include "FrameClock.h"
+#include "Log.h"
 #include <thread>
 bool Application::init = false;
 bool Application::Init()
 {
+	LOG_DEBUG("Initializing application");
 	// 初始化窗口
 	{
 		GlfwWindow::CreateInfo createInfo;
 		window = std::make_unique<GlfwWindow>();
 		if (!window->Init(createInfo)) {
+			LOG_ERROR("Failed to initialize GLFW window");
 			return false;
 		}
 	}
@@ -19,10 +22,12 @@ bool Application::Init()
 		renderer = std::make_unique<VulkanRenderer>();		
 		renderer->AddEnabledInstanceExtensions(extCount, extensions);
 		if (!renderer->InitVulkan()) {
+			LOG_ERROR("Failed to initialize Vulkan");
 			return false;
 		}
 		auto surface = window->CreateSurface(renderer->instance);
 		renderer->Init(surface);
+		LOG_DEBUG("Vulkan renderer initialized");
 	}
 
 	//绑定输入回调
@@ -54,18 +59,24 @@ bool Application::Init()
 	// ImGUI
 	{
 		guiLayer = std::make_unique<ImGuiLayer>();
-		guiLayer->Init(window->GetNativeWindow());
+		if (!guiLayer->Init(window->GetNativeWindow())) {
+			LOG_ERROR("Failed to initialize ImGui layer");
+			return false;
+		}
 	}
 	init = true;
+	LOG_DEBUG("Application initialized successfully");
 	return true;
 }
 
 void Application::Destroy()
 {
+	LOG_DEBUG("Destroying application");
 	guiLayer.reset();
 	renderer.reset();
 	window.reset();
 	init = false;
+	LOG_DEBUG("Application destroyed");
 }
 
 void Application::Resize(int width, int height)
@@ -75,6 +86,7 @@ void Application::Resize(int width, int height)
 
 bool Application::Run()
 {
+	LOG_DEBUG("Entering application main loop");
 	while (!window->ShouldClose())
 	{
 		if (!BeginFrame())
@@ -117,7 +129,7 @@ bool Application::BeginFrame()
 	FrameClock::Get().Tick();
 	if (!renderer->BeginFrame(FrameClock::Get().DeltaSeconds()))
 	{
-		std::cout << "BeginFrame false" << std::endl;
+		LOG_ERROR("Failed to begin frame");
 		return false;
 	}
 	guiLayer->BeginFrame();

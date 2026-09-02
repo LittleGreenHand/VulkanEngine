@@ -4,9 +4,11 @@
 #include "TextureManager.h"
 #include "Render/VulkanDebugUtils.h"
 #include "Math/MathUtils.h"
+#include "Core/Log.h"
 
 void MeshManager::Destroy()
 {
+	LOG_DEBUG("Destroying mesh manager resources");
 	if(isModelsLoaded)
 	{
 		vkDeviceWaitIdle(VulkanContext::GetVkDevice());
@@ -15,10 +17,12 @@ void MeshManager::Destroy()
 		vkglTF::destroyEmptyTexture();
 	}
 	isModelsLoaded = false;
+	LOG_DEBUG("Destroying mesh manager resources successfully");
 }
 
 void MeshManager::LoadModels()
 {
+	LOG_DEBUG("Loading glTF models");
 	vks::VulkanDevice* vulkanDevice = VulkanContext::GetVulkanDevice();
 	uint32_t glTFLoadingFlags = vkglTF::FileLoadingFlags::PreTransformVertices | vkglTF::FileLoadingFlags::PreMultiplyVertexColors;
 
@@ -74,6 +78,7 @@ void MeshManager::LoadModels()
 	skybox.loadFromFile(getAssetPath() + "models/cube.gltf", vulkanDevice, VulkanContext::GetGraphicsQueue(), glTFLoadingFlags);
 	InitModelsSourceDebugName();
 	isModelsLoaded = true;
+	LOG_DEBUG("glTF models loaded successfully");
 }
 
 Dimensions MeshManager::GetSceneDimensions()

@@ -1,9 +1,11 @@
 #include "TextureManager.h"
 #include "Render/VulkanContext.h"
 #include "Render/VulkanDebugUtils.h"
+#include "Core/Log.h"
 
 void TextureManager::Destroy()
 {
+	LOG_DEBUG("Destroying texture manager resources");
 	if (isTexturesLoaded)
 	{
 		textures.albedoMap.destroy();
@@ -13,10 +15,12 @@ void TextureManager::Destroy()
 		textures.roughnessMap.destroy();
 	}
 	isTexturesLoaded = false;
+	LOG_DEBUG("Destroying texture manager resources successfully");
 }
 
 void TextureManager::LoadTextures()
 {
+	LOG_DEBUG("Loading material textures");
 	auto vulkanDevice = VulkanContext::GetVulkanDevice();
 	textures.albedoMap.loadFromFile(getAssetPath() + "models/cerberus/albedo.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, VulkanContext::GetGraphicsQueue());
 	textures.normalMap.loadFromFile(getAssetPath() + "models/cerberus/normal.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, VulkanContext::GetGraphicsQueue());
@@ -30,4 +34,5 @@ void TextureManager::LoadTextures()
 	VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.metallicMap.image, "metallicMap");
 	VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)textures.roughnessMap.image, "roughnessMap");
 	isTexturesLoaded = true;
+	LOG_DEBUG("Material textures loaded successfully");
 }

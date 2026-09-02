@@ -3,8 +3,10 @@
 #include "Render/VulkanRenderer.h"
 #include "MeshManager.h"
 #include "Render/VulkanDebugUtils.h"
+#include "Core/Log.h"
 void EnvironmentManager::Destroy()
 {
+	LOG_DEBUG("Destroying environment resources");
 	if (isIBLTexturesLoaded)
 	{
 		IBL.environmentCube.destroy();
@@ -13,10 +15,12 @@ void EnvironmentManager::Destroy()
 		IBL.lutBrdf.destroy();
 	}
 	isIBLTexturesLoaded = false;
+	LOG_DEBUG("Destroy environment resources successfully");
 }
 
 void EnvironmentManager::LoadIBLTextures()
 {
+	LOG_DEBUG("Loading and generating IBL resources");
 	auto vulkanDevice = VulkanContext::GetVulkanDevice();
 	IBL.environmentCube.loadFromFile(getAssetPath() + "textures/hdr/gcanyon_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, VulkanContext::GetGraphicsQueue(), VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, true);
 
@@ -29,6 +33,7 @@ void EnvironmentManager::LoadIBLTextures()
 	VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)IBL.irradianceCube.image, "irradianceCube");
 	VulkanDebugUtils::SetObjectDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)IBL.prefilteredCube.image, "prefilteredCube");
 	isIBLTexturesLoaded = true;
+	LOG_DEBUG("IBL resources loaded successfully");
 }
 
 void EnvironmentManager::GenerateBRDFLUT(vks::Texture2D& lutBrdf)
@@ -232,7 +237,7 @@ void EnvironmentManager::GenerateBRDFLUT(vks::Texture2D& lutBrdf)
 
 	auto tEnd = std::chrono::high_resolution_clock::now();
 	auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-	std::cout << "Generating BRDF LUT took " << tDiff << " ms" << std::endl;
+	LOG_INFO("Generating BRDF LUT cost {} ms", tDiff);
 }
 
 void EnvironmentManager::GenerateIrradianceCube(vks::TextureCubeMap& irradianceCube, vks::TextureCubeMap& environmentCube)
@@ -611,7 +616,7 @@ void EnvironmentManager::GenerateIrradianceCube(vks::TextureCubeMap& irradianceC
 
 	auto tEnd = std::chrono::high_resolution_clock::now();
 	auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-	std::cout << "Generating irradiance cube with " << numMips << " mip levels took " << tDiff << " ms" << std::endl;
+	LOG_INFO("Generating irradiance cube with {} mip levels cost {} ms", numMips, tDiff);
 }
 
 void EnvironmentManager::GeneratePrefilteredCube(vks::TextureCubeMap& prefilteredCube, vks::TextureCubeMap& environmentCube)
@@ -990,5 +995,5 @@ void EnvironmentManager::GeneratePrefilteredCube(vks::TextureCubeMap& prefiltere
 
 	auto tEnd = std::chrono::high_resolution_clock::now();
 	auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-	std::cout << "Generating pre-filtered enivornment cube with " << numMips << " mip levels took " << tDiff << " ms" << std::endl;
+	LOG_INFO("Generating pre-filtered environment cube with {} mip levels cost {} ms", numMips, tDiff);
 }

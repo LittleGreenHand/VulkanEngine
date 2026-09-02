@@ -11,6 +11,7 @@
 #include "RenderResource/MeshManager.h"
 #include "RenderResource/EnvironmentManager.h"
 #include "VulkanDebugUtils.h"
+#include "core/Log.h"
 
 VulkanRenderer::VulkanRenderer() : VulkanRendererBase()
 {
@@ -31,6 +32,7 @@ VulkanRenderer::VulkanRenderer() : VulkanRendererBase()
 
 VulkanRenderer::~VulkanRenderer()
 {
+	LOG_DEBUG("Destroying Vulkan renderer");
 	vkDeviceWaitIdle(device);
 	vkLight::destroyLightBuffer();
 	if (postProcessManager)
@@ -56,10 +58,12 @@ VulkanRenderer::~VulkanRenderer()
 		}
 	}
 	PostProcessBase::cleanUp();
+	LOG_DEBUG("Destroy Vulkan renderer successfully");
 }
 
 void VulkanRenderer::Init(VkSurfaceKHR surface)
 {
+	LOG_DEBUG("Initializing Vulkan renderer");
 	VulkanContext::Init(this);
 	VulkanDebugUtils::InitDebugUtils(instance, device);
 	VulkanRendererBase::InitSurfaceKHR(surface);
@@ -73,7 +77,7 @@ void VulkanRenderer::Init(VkSurfaceKHR surface)
 		EnvironmentManager::Get().LoadIBLTextures();
 		auto tEnd = std::chrono::high_resolution_clock::now();
 		auto takeTime = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-		std::cout << "load render resource cost time:" << (float)takeTime / 1000.0f << "ms" << std::endl;
+		LOG_INFO("Render resources loaded in {:.2f} ms", takeTime);
 	}
 
 	//初始化主渲染模块相关资源
@@ -89,6 +93,7 @@ void VulkanRenderer::Init(VkSurfaceKHR surface)
 	}
 	InitPostProcess();
 	m_init = true;
+	LOG_DEBUG("Vulkan renderer initialized successfully");
 }
 
 void VulkanRenderer::getEnabledFeatures()
@@ -328,7 +333,7 @@ void VulkanRenderer::preparePipelines()
 
 	auto tEnd = std::chrono::high_resolution_clock::now();
 	auto takeTime = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-	std::cout << "preparePipelines cost time:" << (float)takeTime / 1000.0f << "ms" << std::endl;
+	LOG_INFO("PreparePipelines cost time: {:.2f} ms", takeTime);
 }
 
 void VulkanRenderer::prepareUniformBuffers()
@@ -620,5 +625,6 @@ void VulkanRenderer::OnFramebufferResize(int framebufferWidth, int framebufferHe
 		m_renderHeiht = m_framebufferHeiht = framebufferHeight;
 		windowResize();
 		UpdateDescriptorSets();
+		LOG_INFO("Framebuffer resized to {} x {}", framebufferWidth, framebufferHeight);
 	}
 }

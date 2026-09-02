@@ -1,4 +1,5 @@
 #include "GlfwWindow.h"
+#include "Log.h"
 
 #include <stdexcept>
 #include <utility>
@@ -11,13 +12,20 @@ GlfwWindow::~GlfwWindow()
 bool GlfwWindow::Init(const CreateInfo& createInfo)
 {
 	if (m_window)
+	{
+		LOG_WARNING("GLFW window is already initialized");
 		return true;
+	}
 
 	if (glfwInit() != GLFW_TRUE)
+	{
+		LOG_ERROR("Failed to initialize GLFW");
 		return false;
+	}
 
 	if (glfwVulkanSupported() != GLFW_TRUE)
 	{
+		LOG_ERROR("GLFW reports that Vulkan is not supported");
 		glfwTerminate();
 		return false;
 	}
@@ -36,6 +44,7 @@ bool GlfwWindow::Init(const CreateInfo& createInfo)
 
 	if (!m_window)
 	{
+		LOG_ERROR("Failed to create GLFW window ({}x{})", createInfo.width, createInfo.height);
 		glfwTerminate();
 		return false;
 	}
@@ -55,12 +64,14 @@ bool GlfwWindow::Init(const CreateInfo& createInfo)
 
 	m_framebufferWidth = framebufferWidth > 0 ? static_cast<uint32_t>(framebufferWidth) : 0;
 	m_framebufferHeight = framebufferHeight > 0 ? static_cast<uint32_t>(framebufferHeight) : 0;
+	LOG_DEBUG("GLFW window created with framebuffer size: {}x{}", m_framebufferWidth, m_framebufferHeight);
 
 	return true;
 }
 
 void GlfwWindow::Shutdown()
 {
+	LOG_DEBUG("Shutting down GLFW window");
 	m_inputListener.ClearCallbacks();
 
 	if (m_window)
@@ -72,6 +83,7 @@ void GlfwWindow::Shutdown()
 
 	m_framebufferWidth = 0;
 	m_framebufferHeight = 0;
+	LOG_DEBUG("Shutting down GLFW window successfully");
 }
 
 void GlfwWindow::PollEvents() const
@@ -144,13 +156,20 @@ float GlfwWindow::GetAspectRatio() const
 VkSurfaceKHR GlfwWindow::CreateSurface(VkInstance instance) const
 {
 	if (!m_window)
+	{
+		LOG_ERROR("Cannot create Vulkan surface without a GLFW window");
 		throw std::runtime_error("Cannot create Vulkan surface: GLFW window is null.");
+	}
 
 	VkSurfaceKHR surface = VK_NULL_HANDLE;
 	const VkResult result = glfwCreateWindowSurface(instance, m_window, nullptr, &surface);
 
 	if (result != VK_SUCCESS)
+	{
+		LOG_ERROR("Failed to create Vulkan window surface, VkResult={}", static_cast<int>(result));
 		throw std::runtime_error("Failed to create Vulkan window surface.");
+	}
+	LOG_DEBUG("VkSurfaceKHR created successfully");
 
 	return surface;
 }
@@ -161,8 +180,14 @@ const char** GlfwWindow::GetRequiredVulkanExtensions(uint32_t& extensionCount)
 
 	if (!extensions)
 	{
+		LOG_ERROR("Failed to get required Vulkan instance extensions from GLFW");
 		extensionCount = 0;
 		throw std::runtime_error("Failed to get required Vulkan extensions from GLFW.");
+	}
+	LOG_DEBUG("GLFW requires {} Vulkan instance extensions", extensionCount);
+	for (int i = 0; i < extensionCount; ++i)
+	{
+		LOG_DEBUG("GLFW Required Vulkan extension {}: {}", i, extensions[i]);
 	}
 
 	return extensions;

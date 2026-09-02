@@ -1,11 +1,13 @@
 #include "VulkanRendererBase.h"
 #include "VulkanDebug.h"
 #include "Render/VulkanDebugUtils.h"
+#include "Core/Log.h"
 
 std::vector<const char*> VulkanRendererBase::args;
 
 VkResult VulkanRendererBase::createInstance()
 {
+	LOG_DEBUG("Creating Vulkan instance");
 	std::vector<const char*> instanceExtensions = { VK_KHR_SURFACE_EXTENSION_NAME };
 
 	// Get extensions supported by the instance and store for later use
@@ -106,6 +108,10 @@ VkResult VulkanRendererBase::createInstance()
 	}
 
 	VkResult result = vkCreateInstance(&instanceCreateInfo, nullptr, &instance);
+	if (result != VK_SUCCESS)
+		LOG_ERROR("Failed to create Vulkan instance, VkResult={}", static_cast<int>(result));
+	else
+		LOG_DEBUG("Vulkan instance created");
 
 	// If the debug utils extension is present we set up debug functions, so samples can label objects for debugging
 	if (std::find(supportedInstanceExtensions.begin(), supportedInstanceExtensions.end(), VK_EXT_DEBUG_UTILS_EXTENSION_NAME) != supportedInstanceExtensions.end()) {
@@ -140,6 +146,7 @@ void VulkanRendererBase::createPipelineCache()
 
 void VulkanRendererBase::InitRenderResource()
 {
+	LOG_DEBUG("Initializing base Vulkan render resources");
 	vkDeviceWaitIdle(device);
 	if (!resized)
 	{
@@ -343,6 +350,7 @@ VulkanRendererBase::~VulkanRendererBase()
 
 bool VulkanRendererBase::InitVulkan()
 {
+	LOG_DEBUG("Initializing Vulkan");
 	// Instead of checking for the command line switch, validation can be forced via a define
 #if defined(_VALIDATION)
 	this->settings.validation = true;
@@ -356,6 +364,7 @@ bool VulkanRendererBase::InitVulkan()
 	// Create the instance
 	VkResult result = createInstance();
 	if (result != VK_SUCCESS) {
+		LOG_ERROR("Vulkan instance initialization failed");
 		vks::tools::exitFatal("Could not create Vulkan instance : \n" + vks::tools::errorString(result), result);
 		return false;
 	}
@@ -371,6 +380,7 @@ bool VulkanRendererBase::InitVulkan()
 	// Get number of available physical devices
 	VK_CHECK_RESULT(vkEnumeratePhysicalDevices(instance, &gpuCount, nullptr));
 	if (gpuCount == 0) {
+		LOG_ERROR("No Vulkan-capable physical device found");
 		vks::tools::exitFatal("No device with Vulkan support found", -1);
 		return false;
 	}
@@ -378,6 +388,7 @@ bool VulkanRendererBase::InitVulkan()
 	std::vector<VkPhysicalDevice> physicalDevices(gpuCount);
 	result = vkEnumeratePhysicalDevices(instance, &gpuCount, physicalDevices.data());
 	if (result != VK_SUCCESS) {
+		LOG_ERROR("Failed to enumerate Vulkan physical devices, VkResult={}", static_cast<int>(result));
 		vks::tools::exitFatal("Could not enumerate physical devices : \n" + vks::tools::errorString(result), result);
 		return false;
 	}
@@ -428,10 +439,12 @@ bool VulkanRendererBase::InitVulkan()
 
 	result = vulkanDevice->createLogicalDevice(enabledFeatures, enabledDeviceExtensions, deviceCreatepNextChain);
 	if (result != VK_SUCCESS) {
+		LOG_ERROR("Failed to create Vulkan logical device, VkResult={}", static_cast<int>(result));
 		vks::tools::exitFatal("Could not create Vulkan device: \n" + vks::tools::errorString(result), result);
 		return false;
 	}
 	device = vulkanDevice->logicalDevice;
+	LOG_INFO("Vulkan logical device created: {}", deviceProperties.deviceName);
 
 	// Get a graphics queue from the device
 	vkGetDeviceQueue(device, vulkanDevice->queueFamilyIndices.graphics, 0, &m_queue);

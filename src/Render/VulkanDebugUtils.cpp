@@ -1,5 +1,6 @@
 #include "VulkanDebugUtils.h"
 #include <iostream>
+#include "core/Log.h"
 
 namespace VulkanDebugUtils
 {
@@ -51,8 +52,7 @@ namespace VulkanDebugUtils
 			debugUtilsSupported = (vkCreateDebugUtilsMessengerEXT != VK_NULL_HANDLE);
 		}
 		else {
-			std::cout << "Warning: " << VK_EXT_DEBUG_UTILS_EXTENSION_NAME << " not present, debug utils are disabled.";
-			std::cout << "Try running the sample from inside a Vulkan graphics debugger (e.g. RenderDoc)" << std::endl;
+			LOG_WARNING("Warning: {} not present, debug utils are disabled.", VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 		}
 	}
 
