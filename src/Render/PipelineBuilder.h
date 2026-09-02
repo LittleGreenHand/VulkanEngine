@@ -1,7 +1,7 @@
 #pragma once
 #include <vulkan/vulkan.h>
 #include "VulkanRenderer.h"
-#include "base/VulkanglTFModel.h"
+#include "RenderBase/VulkanglTFModel.h"
 
 class PipelineBuilder {
 public:

@@ -9,7 +9,7 @@
 #include "Render/VulkanContext.h"
 #include "Render/VulkanRenderer.h"
 #include "RenderResource/MeshManager.h"
-#include "core/FrameClock.h"
+#include "Core/FrameClock.h"
 
 // 用于跟踪选中的节点
 vkglTF::Node* selectedNode = nullptr;

@@ -14,8 +14,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <map>
 #include <vulkan/vulkan.h>
-#include "base/VulkanRendererBase.h"
-#include "base/VulkanglTFModel.h"
+#include "RenderBase/VulkanRendererBase.h"
+#include "RenderBase/VulkanglTFModel.h"
 #include "VulkanLights.h"
 
 enum PipelinesIndex {

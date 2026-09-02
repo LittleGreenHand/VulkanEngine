@@ -630,6 +630,7 @@ void VulkanRendererBase::setupDepthStencil()
 	depthStencil.mipLevels = 1;
 	depthStencil.layerCount = 1;
 	depthStencil.format = depthFormat;
+	depthStencil.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	depthStencil.updateDescriptor();
 }
 

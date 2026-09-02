@@ -26,16 +26,16 @@
 
 #include "vulkan/vulkan.h"
 
-#include "base/CommandLineParser.hpp"
-#include "base/VulkanTools.h"
-#include "base/VulkanSwapChain.h"
-#include "base/VulkanBuffer.h"
-#include "base/VulkanDevice.h"
-#include "base/VulkanTexture.h"
+#include "RenderBase/CommandLineParser.hpp"
+#include "RenderBase/VulkanTools.h"
+#include "RenderBase/VulkanSwapChain.h"
+#include "RenderBase/VulkanBuffer.h"
+#include "RenderBase/VulkanDevice.h"
+#include "RenderBase/VulkanTexture.h"
 
-#include "base/VulkanInitializers.hpp"
-#include "base/camera.hpp"
-#include "base/benchmark.hpp"
+#include "RenderBase/VulkanInitializers.hpp"
+#include "RenderBase/camera.hpp"
+#include "RenderBase/benchmark.hpp"
 #include "Types.hpp"
 
 //主要负责Vulkan的初始化

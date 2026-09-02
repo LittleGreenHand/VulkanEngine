@@ -3,9 +3,9 @@
 #include <array>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include "base/VulkanDevice.h"
+#include "RenderBase/VulkanDevice.h"
 #include "Types.hpp"
-#include "base/VulkanTexture.h"
+#include "RenderBase/VulkanTexture.h"
 
 namespace vkLight
 {

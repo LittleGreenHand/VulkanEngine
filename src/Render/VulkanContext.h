@@ -1,7 +1,7 @@
 #pragma once
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
-#include "base/VulkanDevice.h"
+#include "RenderBase/VulkanDevice.h"
 
 class VulkanRenderer;
 namespace VulkanContext

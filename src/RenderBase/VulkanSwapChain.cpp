@@ -266,6 +266,7 @@ void VulkanSwapChain::create(uint32_t& width, uint32_t& height, bool vsync, bool
 		colorAttachmentView.flags = 0;
 		colorAttachmentView.image = swapChainImages[i].image = images[i];
 		VK_CHECK_RESULT(vkCreateImageView(device, &colorAttachmentView, nullptr, &swapChainImages[i].view));
+		swapChainImages[i].imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	}
 }
 

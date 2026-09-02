@@ -1,6 +1,6 @@
 #pragma once
 #include <vulkan/vulkan.h>
-#include "base/VulkanTexture.h"
+#include "RenderBase/VulkanTexture.h"
 #include <glm/glm.hpp>
 
 constexpr uint32_t MaxConcurrentFrames{ 2 };
