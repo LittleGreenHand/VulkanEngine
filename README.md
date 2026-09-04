@@ -15,7 +15,7 @@
 - Git
 - Visual Studio 2026
 
-# 第三方库
+# 第三方依赖
 - GLFW
 - GLM
 - ImGui
@@ -23,24 +23,26 @@
 - KTX
 - gli
 - Slang
-以上第三方库都已包含在仓库的thirdParty目录下，如果需要更新相关库的版本，可以自行下载替换
-
 - PhysX-For-VS2026
-    PhysX-For-VS2026是本仓库的SubModule，是一个由作者从PhysX官方仓库Fork出来的仓库，区别是添加了生成VS2026的slnx的支持，官方仓库目前不支持生成VS2026。
+    - PhysX-For-VS2026是由作者从PhysX官方仓库Fork出来的仓库，区别是添加了生成VS2026的slnx的支持，官方仓库目前不支持生成VS2026。
 
 # 项目构建
 项目当前依赖了PhysX来实现刚体模拟，因此克隆本仓库后需要先下载submodule，然后再通过CMake生成解决方案
-1.克隆本仓库后，在仓库根目录打开 Git Bash，执行：
-    git submodule update --init --recursive
-该命令会下载项目依赖的 PhysX Submodule。
-2.双击执行thirdParty\PhysX\physx目录下的“generate_projects.bat”脚本。
-3.在弹出的命令行中输入5，选择vc18win64-cpu-only配置（意思是生成VS2026的slnx，也可以根据自己的需求选择其他版本的配置）。
+- 1.克隆本仓库后，在仓库根目录打开 Git Bash，执行：
+    - git submodule update --init --recursive
+
+- 2.双击执行thirdParty\PhysX\physx目录下的“generate_projects.bat”脚本。
+
+- 3.在弹出的命令行中输入5来生成vc18win64-cpu-only配置（意思是生成VS2026的slnx，也可以根据自己的需求选择其他版本的配置）。
     - 如果生成成功，会在thirdParty\PhysX\physx\compiler\vc18win64-cpu-only目录下生成VS2026的slnx文件，生成的目录取决于命令行中选择的配置。
-4.打开compiler\vc18win64-cpu-only目录下的slnx，选择debug配置，然后生成解决方案。
+ 
+- 4.打开compiler\vc18win64-cpu-only目录下的slnx，选择debug配置，然后生成解决方案。
     - 如果要以release运行本仓库项目的话，则需要生成PhysX的release版本。
-5.生成PhysX后，就可以使用CMake生成本仓库项目，打开CMake GUI，分别选择源码目录和build目录，然后点击Configure按钮，执行结束后再点击Generate按钮，等待执行结束。
+
+- 5.生成PhysX后，就可以使用CMake生成本仓库项目，打开CMake GUI，分别设置源码目录和build目录，然后点击Configure按钮，执行结束后再点击Generate按钮，等待执行结束。
     - 如果PhysX不是使用vc18win64-cpu-only配置生成的slnx，需要通过PHYSX_BIN_DIR变量手动设置PhysX的编译输出目录，默认是${CMAKE_SOURCE_DIR}/thirdParty/PhysX/physx/bin/win.x86_64.vc143.md
-6.Generate成功后点击Open Project打开VS，将VulkanLab设置为启动项目并编译即可。
+
+- 6.Generate成功后点击Open Project打开VS，将VulkanLab设置为启动项目并编译即可。
     - 编译时会自动将PhysX的DLL文件复制到输出目录。
 
 ## Features
