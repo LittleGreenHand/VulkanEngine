@@ -2,17 +2,18 @@
 
 一个基于 Vulkan 的个人实时渲染器项目，用于学习、研究和实践现代实时渲染与物理模拟技术。
 
-项目基于 [Sascha Willems Vulkan Samples](https://github.com/SaschaWillems/Vulkan) 的部分初始化 Vulkan 的 Framework 进行开发，目前已重构其大部分逻辑，并在此基础上实现了自己的渲染管线、PBR 光照、延迟渲染、阴影、后处理、材质、Shader 资源布局以及相关渲染功能。
+项目基于 [Sascha Willems Vulkan Samples](https://github.com/SaschaWillems/Vulkan) 的部分初始化 Vulkan 的 Framework 进行开发，目前已简化重构其大部分逻辑，然后在此基础上实现了自己的渲染管线、PBR 光照、延迟渲染、阴影、后处理、材质、Shader 资源布局以及相关渲染功能。
 
-本项目的主要目标是在一个稳定的 Vulkan 基础框架之上，持续研究和实现Realtime Rendering、物理模拟与引擎架构。
+本项目的主要目标是在一个稳定的 Vulkan 基础渲染框架上，持续研究和实现Realtime Rendering、物理模拟与引擎架构。
 
-# 环境依赖
+# 个人开发环境
 - Windows 10/11
-- CMake 3.10
+- CMake 4.4
 - C++ 20
-- Vulkan SDK
-- Python3
+- Vulkan 1.4
+- Python
 - Git
+- Visual Studio 2026
 
 # 第三方库
 - GLFW
@@ -24,11 +25,25 @@
 - Slang
 以上第三方库都已包含在仓库的thirdParty目录下，如果需要更新相关库的版本，可以自行下载替换
 
+- PhysX-For-VS2026
+    PhysX-For-VS2026是本仓库的SubModule，是一个由作者从PhysX官方仓库Fork出来的仓库，区别是添加了生成VS2026的slnx的支持，官方仓库目前不支持生成VS2026。
+
 # 项目构建
-直接使用CMake生成即可
+项目当前依赖了PhysX来实现刚体模拟，因此克隆本仓库后需要先下载submodule，然后再通过CMake生成解决方案
+1.克隆本仓库后，在仓库根目录打开 Git Bash，执行：
+    git submodule update --init --recursive
+该命令会下载项目依赖的 PhysX Submodule。
+2.双击执行thirdParty\PhysX\physx目录下的“generate_projects.bat”脚本。
+3.在弹出的命令行中输入5，选择vc18win64-cpu-only配置（意思是生成VS2026的slnx，也可以根据自己的需求选择其他版本的配置）。
+    - 如果生成成功，会在thirdParty\PhysX\physx\compiler\vc18win64-cpu-only目录下生成VS2026的slnx文件，生成的目录取决于命令行中选择的配置。
+4.打开compiler\vc18win64-cpu-only目录下的slnx，选择debug配置，然后生成解决方案。
+    - 如果要以release运行本仓库项目的话，则需要生成PhysX的release版本。
+5.生成PhysX后，就可以使用CMake生成本仓库项目，打开CMake GUI，分别选择源码目录和build目录，然后点击Configure按钮，执行结束后再点击Generate按钮，等待执行结束。
+    - 如果PhysX不是使用vc18win64-cpu-only配置生成的slnx，需要通过PHYSX_BIN_DIR变量手动设置PhysX的编译输出目录，默认是${CMAKE_SOURCE_DIR}/thirdParty/PhysX/physx/bin/win.x86_64.vc143.md
+6.Generate成功后点击Open Project打开VS，将VulkanLab设置为启动项目并编译即可。
+    - 编译时会自动将PhysX的DLL文件复制到输出目录。
 
 ## Features
-
 目前已经实现的主要功能包括：
 - Hybrid Deferred
 - PBR渲染
@@ -44,7 +59,6 @@
 - KTX texture loading
 
 ### Shader System
-
 Shader 使用Slang着色器语言编写，生成Shaders项目时会通过python脚本编译生成SPIR-V，相关编译设置已经集成到 CMake 文件中。
 
 ### Demo screenshot
