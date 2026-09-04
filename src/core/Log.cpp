@@ -390,14 +390,8 @@ void Log::WriteFormatted(
 	std::string_view format,
 	std::format_args args)
 {
-	// 每个线程复用两个字符串缓冲区：
-	// 1. 带内部 marker 的 format string
-	// 2. 最终格式化消息
-	//
-	// 这样稳定运行后通常不会为每条日志反复进行 heap allocation，
-	// 同时不同线程之间也不需要为了格式化阶段互相加锁。
-	thread_local std::string highlightedFormat;
-	thread_local std::string formattedMessage;
+	std::string highlightedFormat;
+	std::string formattedMessage;
 
 	BuildHighlightedFormat(
 		format,
