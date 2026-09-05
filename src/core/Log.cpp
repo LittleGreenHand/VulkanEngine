@@ -12,6 +12,7 @@
 
 #endif
 
+#define ENABLE_FILE_LINE 0
 
 namespace
 {
@@ -231,8 +232,8 @@ namespace
 		// 文件名弱化为灰色。
 		SetConsoleAttributes(
 			FOREGROUND_RED |
-			FOREGROUND_GREEN |
-			FOREGROUND_BLUE);
+			FOREGROUND_BLUE |
+			FOREGROUND_INTENSITY);
 	}
 
 
@@ -441,7 +442,7 @@ void Log::WriteImpl(
 		message);
 
 
-#if !defined(NDEBUG)
+#if ENABLE_FILE_LINE
 
 	// Source Location 整体弱化，行号单独突出。
 	SetFileColor(output);

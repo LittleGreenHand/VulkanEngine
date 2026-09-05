@@ -26,8 +26,6 @@ public:
 		std::format_string<Args...> format,
 		Args&&... args)
 	{
-		// 保留 std::format 的编译期格式检查，同时把实际格式化工作放到 cpp 中。
-		// args 在此处是具名变量，因此作为左值传给 make_format_args 是安全的。
 		WriteFormatted(
 			level,
 			file,

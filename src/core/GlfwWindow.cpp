@@ -64,7 +64,7 @@ bool GlfwWindow::Init(const CreateInfo& createInfo)
 
 	m_framebufferWidth = framebufferWidth > 0 ? static_cast<uint32_t>(framebufferWidth) : 0;
 	m_framebufferHeight = framebufferHeight > 0 ? static_cast<uint32_t>(framebufferHeight) : 0;
-	LOG_DEBUG("GLFW window created with framebuffer size: {}x{}", m_framebufferWidth, m_framebufferHeight);
+	LOG_INFO("GLFW window created with framebuffer size: {}x{}", m_framebufferWidth, m_framebufferHeight);
 
 	return true;
 }
