@@ -3,10 +3,11 @@
 #include "Render/VulkanRenderer.h"
 #include "GlfwWindow.h"
 #include "ImGuiLayer.h"
+#include "Simulation/PhysicsWorld.h"
 class Application
 {
 public:
-	static bool IsInit() { return init; }
+	static bool IsInit() { return m_init; }
 	static Application& GetInstance()
 	{
 		static Application instance;
@@ -35,10 +36,11 @@ public:
 	void OnScroll(double xOffset, double yOffset);
 	void OnFramebufferResize(int framebufferWidth, int framebufferHeight);
 private:
-	static bool init;
+	static bool m_init;
 	bool m_needResize = false; // 窗口是否处于Resize状态
-	std::chrono::steady_clock::time_point lastResizeTime;//记录最后一次调用OnFramebufferResize的时间
-	std::unique_ptr<VulkanRenderer> renderer;
-	std::unique_ptr<GlfwWindow> window;
-	std::unique_ptr<ImGuiLayer> guiLayer;
+	std::chrono::steady_clock::time_point m_lastResizeTime;//记录最后一次调用OnFramebufferResize的时间
+	std::unique_ptr<VulkanRenderer> m_renderer;
+	std::unique_ptr<GlfwWindow> m_window;
+	std::unique_ptr<ImGuiLayer> m_guiLayer;
+	std::unique_ptr<PhysicsWorld> m_physicsWorld;
 };

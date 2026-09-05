@@ -159,9 +159,8 @@ namespace
 		switch (level)
 		{
 		case LogLevel::Debug:
-			// 灰白色
+			// 青色
 			return
-				FOREGROUND_RED |
 				FOREGROUND_GREEN |
 				FOREGROUND_BLUE;
 
@@ -229,7 +228,7 @@ namespace
 
 	void SetFileColor(std::ostream&)
 	{
-		// 文件名弱化为灰色。
+		// 亮紫色
 		SetConsoleAttributes(
 			FOREGROUND_RED |
 			FOREGROUND_BLUE |
@@ -239,7 +238,7 @@ namespace
 
 	void SetLineColor(std::ostream&)
 	{
-		// 行号使用亮紫色，方便快速定位。
+		// 亮紫色
 		SetConsoleAttributes(
 			FOREGROUND_RED |
 			FOREGROUND_BLUE |
@@ -267,7 +266,7 @@ namespace
 		switch (level)
 		{
 		case LogLevel::Debug:
-			return "\033[90m";
+			return "\033[36m";
 
 		case LogLevel::Info:
 			return "\033[92m";
@@ -312,14 +311,14 @@ namespace
 
 	void SetFileColor(std::ostream& output)
 	{
-		// 灰色，同时恢复默认背景，避免继承 Fatal 的红色背景。
-		output << "\033[90;49m";
+		// 亮紫色
+		output << "\033[95;49m";
 	}
 
 
 	void SetLineColor(std::ostream& output)
 	{
-		// 亮紫色，同时恢复默认背景。
+		// 亮紫色
 		output << "\033[95;49m";
 	}
 

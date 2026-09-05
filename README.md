@@ -4,7 +4,7 @@
 
 项目基于 [Sascha Willems Vulkan Samples](https://github.com/SaschaWillems/Vulkan) 的部分初始化 Vulkan 的 Framework 进行开发，目前已简化重构其大部分逻辑，然后在此基础上实现了自己的渲染管线、PBR 光照、延迟渲染、阴影、后处理、材质、Shader 资源布局以及相关渲染功能。
 
-本项目的主要目标是在一个稳定的 Vulkan 基础渲染框架上，持续研究和实现Realtime Rendering、物理模拟与引擎架构。
+本项目的主要目标是在一个稳定的 Vulkan 基础渲染框架上，持续研究和实现Realtime Rendering、物理模拟与引擎架构，项目中使用的是Y向上的右手系，XYZ旋转顺序。
 
 # 个人开发环境
 - Windows 10/11
